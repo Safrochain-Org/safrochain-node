@@ -1,0 +1,31 @@
+syntax = "proto3";
+package safrochain.drip.v1;
+
+import "amino/amino.proto";
+import "cosmos/query/v1/query.proto";
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "safrochain/drip/v1/genesis.proto";
+
+option go_package = "github.com/Safrochain_Org/safrochain/x/drip/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  // Params retrieves the Drip module params
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/safrochain/drip/v1/params";
+  }
+}
+
+// QueryParamsRequest is the request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  // params is the returned parameter from the module
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}

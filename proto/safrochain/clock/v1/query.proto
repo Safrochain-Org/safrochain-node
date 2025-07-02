@@ -1,0 +1,75 @@
+syntax = "proto3";
+package safrochain.clock.v1;
+
+import "amino/amino.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "cosmos/query/v1/query.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "safrochain/clock/v1/clock.proto";
+import "safrochain/clock/v1/genesis.proto";
+
+option go_package = "github.com/Safrochain_Org/safrochain/x/clock/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  // ClockContracts
+  rpc ClockContracts(QueryClockContractsRequest) returns (QueryClockContractsResponse) {
+    option (google.api.http).get = "/safrochain/clock/v1/contracts";
+    option (cosmos.query.v1.module_query_safe) = true;
+  }
+  // ClockContract
+  rpc ClockContract(QueryClockContractRequest) returns (QueryClockContractResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/safrochain/clock/v1/contracts/{contract_address}";
+  }
+  // Params
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/safrochain/clock/v1/params";
+  }
+}
+
+// QueryClockContracts is the request type to get all contracts.
+message QueryClockContractsRequest {
+  // pagination defines an optional pagination for the request.
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// QueryClockContractsResponse is the response type for the Query/ClockContracts RPC method.
+message QueryClockContractsResponse {
+  // clock_contracts are the clock contracts.
+  repeated ClockContract clock_contracts = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+  // pagination defines the pagination in the response.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryClockContract is the request type to get a single contract.
+message QueryClockContractRequest {
+  // contract_address is the address of the contract to query.
+  string contract_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// QueryClockContractResponse is the response type for the Query/ClockContract RPC method.
+message QueryClockContractResponse {
+  // contract is the clock contract.
+  ClockContract clock_contract = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// QueryParams is the request type to get all module params.
+message QueryParamsRequest {}
+
+// QueryClockContractsResponse is the response type for the Query/ClockContracts RPC method.
+message QueryParamsResponse {
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}

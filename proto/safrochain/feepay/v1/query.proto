@@ -1,0 +1,118 @@
+syntax = "proto3";
+package safrochain.feepay.v1;
+
+import "amino/amino.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "cosmos/query/v1/query.proto";
+import "cosmos_proto/cosmos.proto";
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "safrochain/feepay/v1/feepay.proto";
+import "safrochain/feepay/v1/genesis.proto";
+
+option go_package = "github.com/Safrochain_Org/safrochain/x/feepay/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  // FeePayContract queries a single fee pay contract by address
+  rpc FeePayContract(QueryFeePayContractRequest) returns (QueryFeePayContractResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/safrochain/feepay/v1/contract/{contract_address}";
+  }
+
+  // Retrieve all fee pay contracts
+  rpc FeePayContracts(QueryFeePayContractsRequest) returns (QueryFeePayContractsResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/safrochain/feepay/v1/all_contracts";
+  }
+
+  // Retrieve the number of uses on a fee pay contract by wallet
+  rpc FeePayContractUses(QueryFeePayContractUsesRequest) returns (QueryFeePayContractUsesResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/safrochain/feepay/v1/contract/{contract_address}/uses/{wallet_address}";
+  }
+
+  // Query if sender is eligible for fee pay contract interaction
+  rpc FeePayWalletIsEligible(QueryFeePayWalletIsEligibleRequest) returns (QueryFeePayWalletIsEligibleResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/safrochain/feepay/v1/contract/{contract_address}/eligible/{wallet_address}";
+  }
+
+  // Params retrieves the FeePay module params
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/safrochain/feepay/v1/params";
+  }
+}
+
+// QueryFeePayContractRequest retrieves a single fee pay contract
+message QueryFeePayContractRequest {
+  // contract_address defines the address of the fee pay contract
+  string contract_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// QueryFeePayContractResponse defines the response for retrieving a single fee pay contract
+message QueryFeePayContractResponse {
+  // contract defines the fee pay contract
+  FeePayContract fee_pay_contract = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// Message for querying a list of fee pay contracts
+message QueryFeePayContractsRequest {
+  // Pagination defines an optional pagination for the request.
+  cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+// The response for querying all fee pay contracts
+message QueryFeePayContractsResponse {
+  // A slice of all the stored fee pay contracts
+  repeated FeePayContract fee_pay_contracts = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+  // pagination defines the pagination in the response.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// Message for querying the number of uses on a fee pay contract by wallet
+message QueryFeePayContractUsesRequest {
+  // The contract address.
+  string contract_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  // The wallet address.
+  string wallet_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// The response for querying the number of uses on a fee pay contract by wallet
+message QueryFeePayContractUsesResponse {
+  // The number of uses on the fee pay contract by wallet
+  uint64 uses = 1;
+}
+
+// Message for querying if a wallet is eligible for fee pay contract interactions
+message QueryFeePayWalletIsEligibleRequest {
+  // The contract address.
+  string contract_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  // The wallet address.
+  string wallet_address = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+// The response for querying if a wallet is eligible for fee pay contract interactions
+message QueryFeePayWalletIsEligibleResponse {
+  // The eligibility of the wallet for fee pay contract interactions
+  bool eligible = 1;
+}
+
+// QueryParamsRequest is the request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is the response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  // params is the returned Feepay parameter
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}

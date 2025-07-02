@@ -1,0 +1,100 @@
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - dogsled
+    - errcheck
+    - goconst
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - staticcheck
+    - unconvert
+    - unused
+    - unparam
+    - revive
+  settings:
+    revive:
+      enable-all-rules: true
+      rules:
+        - name: package-comments
+          disabled: true
+        - name: line-length-limit
+          disabled: true
+        - name: add-constant
+          disabled: true
+        - name: cognitive-complexity
+          disabled: true
+        - name: argument-limit
+          disabled: true
+        - name: cyclomatic
+          disabled: true
+        - name: redundant-import-alias
+          disabled: true
+        - name: function-length
+          disabled: true
+        - name: exported
+          disabled: true
+        - name: flag-parameter
+          disabled: true
+        - name: unchecked-type-assertion
+          disabled: true
+        - name: confusing-results
+          disabled: true
+        - name: max-public-structs
+          arguments:
+            - 20
+        - name: confusing-naming
+          disabled: true
+        - name: function-result-limit
+          arguments:
+            - 4
+        - name: early-return
+          disabled: true
+        - name: deep-exit
+          disabled: true
+    gosec:
+      excludes:
+        - G404
+        - G115
+        - G103
+        - G304
+    govet:
+      disable:
+        - printf
+  exclusions:
+    paths:
+      - ".*.pb.go"
+      - ".*.pb.gw.go"
+      - "./api/*.*"
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - blank
+        - dot
+        - prefix(github.com/cometbft/cometbft)
+        - prefix(github.com/cosmos)
+        - prefix(cosmossdk.io)
+        - prefix(github.com/cosmos/cosmos-sdk)
+        - prefix(github.com/Safrochain_Org/safrochain)
+      custom-order: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

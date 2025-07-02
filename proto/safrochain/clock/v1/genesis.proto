@@ -1,0 +1,23 @@
+syntax = "proto3";
+package safrochain.clock.v1;
+
+import "amino/amino.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/Safrochain_Org/safrochain/x/clock/types";
+
+// GenesisState - initial state of module
+message GenesisState {
+  // Params of this module
+  Params params = 1 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true
+  ];
+}
+
+// Params defines the set of module parameters.
+message Params {
+  option (gogoproto.equal) = true;
+  // contract_gas_limit defines the maximum amount of gas that can be used by a contract.
+  uint64 contract_gas_limit = 1;
+}
