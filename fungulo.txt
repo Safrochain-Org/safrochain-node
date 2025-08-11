@@ -1,0 +1,20 @@
+﻿addr_safro1mp974ckyvmlva7jf4mhc3umkz0utx3h54vc4z
+
+mnemonic":"thing sock game glance pink boat have leave winner alley bamboo habit sting correct swallow shift measure live special ball pitch enjoy say idea"
+
+addr_safro16xdv0klplhdwvc0n5kjvg0w536qpd6v5rglcf3
+
+"mnemonic":"debate slow bonus manage knee forward reason animal essence stuff cute secret asset phone slim void legal also album soap link stock mountain sure"
+
+pw : safrowallet1 !
+
+Ottawa
+
+
+safrochaind tx slashing unjail \
+  --from "Ottawa" \
+  --chain-id safro-testnet-1 \
+  --keyring-backend file \
+  --fees 5000usaf \
+  --gas 80000 \
+  --yes
