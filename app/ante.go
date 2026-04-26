@@ -79,15 +79,17 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		sigGasConsumer = ante.DefaultSigVerificationGasConsumer
 	}
 
-	// Flag for determining if the tx is a FeePay transaction. This flag
-	// is used to communicate between the FeePay decorator and the GlobalFee decorator.
-	isFeePayTx := false
+	// SAF-08: the FeePay routing flag is no longer a shared `*bool` between
+	// the three decorators. The FeeRouteDecorator allocates a fresh
+	// FeePayTxState per transaction and stores it on the sdk.Context, where
+	// the DeductFee and GlobalFee decorators read (and the DeductFee
+	// decorator may mutate) it without racing other in-flight transactions.
 
 	// Define FeePay and Global Fee decorators. These decorators are called in different orders based on the type of
 	// transaction. The FeePay decorator is called first for FeePay transactions, and the GlobalFee decorator is called
 	// first for all other transactions. See the FeeRouteDecorator for more details.
-	fpd := feepayante.NewDeductFeeDecorator(options.FeePayKeeper, options.GlobalFeeKeeper, options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.BondDenom, &isFeePayTx)
-	gfd := globalfeeante.NewFeeDecorator(options.BypassMinFeeMsgTypes, options.GlobalFeeKeeper, options.StakingKeeper, maxBypassMinFeeMsgGasUsage, &isFeePayTx)
+	fpd := feepayante.NewDeductFeeDecorator(options.FeePayKeeper, options.GlobalFeeKeeper, options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.BondDenom)
+	gfd := globalfeeante.NewFeeDecorator(options.BypassMinFeeMsgTypes, options.GlobalFeeKeeper, options.StakingKeeper, maxBypassMinFeeMsgGasUsage)
 
 	anteDecorators := []sdk.AnteDecorator{
 		// outermost AnteDecorator. SetUpContext must be called first
@@ -113,7 +115,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 		// safrochain custom modules
 		// Fee route decorator calls FeePay and Global Fee decorators in different orders
 		// depending on the type of incoming tx.
-		feepayante.NewFeeRouteDecorator(options.FeePayKeeper, &fpd, &gfd, &isFeePayTx),
+		feepayante.NewFeeRouteDecorator(options.FeePayKeeper, &fpd, &gfd),
 		feeshareante.NewFeeSharePayoutDecorator(options.BankKeeper, options.FeeShareKeeper),
 
 		// signatures

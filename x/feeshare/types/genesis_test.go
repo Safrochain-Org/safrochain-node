@@ -8,6 +8,16 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+// init configures the global Bech32 prefix to match the live chain
+// (addr_safro). FeeShare validation round-trips every contract,
+// deployer, and withdrawer through sdk.AccAddressFromBech32 which
+// compares the prefix to the value on sdk.Config; tests in `package
+// types` do not run app bootstrap so we set it explicitly here.
+func init() {
+	cfg := sdk.GetConfig()
+	cfg.SetBech32PrefixForAccount("addr_safro", "addr_safropub")
+}
+
 type GenesisTestSuite struct {
 	s.Suite
 	address1  string
@@ -21,11 +31,12 @@ func TestGenesisTestSuite(t *testing.T) {
 }
 
 func (suite *GenesisTestSuite) SetupTest() {
-	suite.address1 = sdk.AccAddress([]byte("cosmos1")).String()
-	suite.address2 = sdk.AccAddress([]byte("cosmos2")).String()
+	suite.address1 = sdk.AccAddress([]byte("addr_safro1")).String()
+	suite.address2 = sdk.AccAddress([]byte("addr_safro2")).String()
 
-	suite.contractA = "cosmos15u3dt79t6sxxa3x3kpkhzsy56edaa5a66wvt3kxmukqjz2sx0hesh45zsv"
-	suite.contractB = "cosmos168ctmpyppk90d34p3jjy658zf5a5l3w8wk35wht6ccqj4mr0yv8skhnwe8"
+	// 32-byte contract addresses bech32-encoded with the addr_safro HRP.
+	suite.contractA = "addr_safro1fz7eevr8l8cfpk7a3qv0xgyl4fghhnsf44xs7jly3p48wwge8jfs7epqm2"
+	suite.contractB = "addr_safro17nerj8pwku9uwfwct973pjk3ypmxxfwatwvvj9kq3832w4yd700qwkw203"
 }
 
 func (suite *GenesisTestSuite) TestValidateGenesis() {

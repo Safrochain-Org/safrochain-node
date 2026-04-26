@@ -13,6 +13,7 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 
+	feepaytypes "github.com/Safrochain_Org/safrochain/x/feepay/types"
 	globalfeekeeper "github.com/Safrochain_Org/safrochain/x/globalfee/keeper"
 )
 
@@ -34,16 +35,18 @@ type FeeDecorator struct {
 	GlobalFeeKeeper                 globalfeekeeper.Keeper
 	StakingKeeper                   stakingkeeper.Keeper
 	MaxTotalBypassMinFeeMsgGasUsage uint64
-	IsFeePayTx                      *bool
 }
 
-func NewFeeDecorator(bypassMsgTypes []string, gfk globalfeekeeper.Keeper, sk stakingkeeper.Keeper, maxTotalBypassMinFeeMsgGasUsage uint64, isFeePayTx *bool) FeeDecorator {
+// NewFeeDecorator constructs a FeeDecorator. The previous `isFeePayTx *bool`
+// argument was removed in favour of per-transaction state stored on
+// sdk.Context (SAF-08); the FeeRouteDecorator allocates that state and the
+// FeeDecorator reads it via feepaytypes.GetFeePayTxState.
+func NewFeeDecorator(bypassMsgTypes []string, gfk globalfeekeeper.Keeper, sk stakingkeeper.Keeper, maxTotalBypassMinFeeMsgGasUsage uint64) FeeDecorator {
 	return FeeDecorator{
 		BypassMinFeeMsgTypes:            bypassMsgTypes,
 		GlobalFeeKeeper:                 gfk,
 		StakingKeeper:                   sk,
 		MaxTotalBypassMinFeeMsgGasUsage: maxTotalBypassMinFeeMsgGasUsage,
-		IsFeePayTx:                      isFeePayTx,
 	}
 }
 
@@ -55,7 +58,7 @@ func (mfd FeeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, ne
 	}
 
 	// Call next handler if the execution mode is CheckTx, simulation, or if the tx is a fee pay tx
-	if !ctx.IsCheckTx() || simulate || *mfd.IsFeePayTx {
+	if !ctx.IsCheckTx() || simulate || feepaytypes.GetFeePayTxState(ctx).IsFeePayTx() {
 		return next(ctx, tx, simulate)
 	}
 

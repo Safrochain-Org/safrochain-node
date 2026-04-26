@@ -3,7 +3,6 @@ package keeper
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 
 	"cosmossdk.io/collections"
@@ -91,7 +90,11 @@ func (h GovHooks) AfterProposalSubmission(ctx context.Context, proposalID uint64
 	}
 
 	if err := h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz); err != nil {
-		_, err = fmt.Println("AfterProposalSubmission: ", err)
+		// SAF-04: surface the contract execution failure via the module logger
+		// and return the original error. The previous `_, err = fmt.Println(...)`
+		// pattern overwrote `err` with the (always nil) error returned by
+		// fmt.Println, silently dropping every contract failure.
+		h.k.Logger(ctx).Error("AfterProposalSubmission contract hook failed", "error", err)
 		return err
 	}
 
@@ -112,7 +115,8 @@ func (h GovHooks) AfterProposalDeposit(ctx context.Context, proposalID uint64, _
 	}
 
 	if err := h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz); err != nil {
-		_, err = fmt.Println("AfterProposalDeposit: ", err)
+		// SAF-04: see AfterProposalSubmission for rationale.
+		h.k.Logger(ctx).Error("AfterProposalDeposit contract hook failed", "error", err)
 		return err
 	}
 
@@ -133,7 +137,8 @@ func (h GovHooks) AfterProposalVote(ctx context.Context, proposalID uint64, vote
 	}
 
 	if err := h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz); err != nil {
-		_, err = fmt.Println("AfterProposalVote: ", err)
+		// SAF-04: see AfterProposalSubmission for rationale.
+		h.k.Logger(ctx).Error("AfterProposalVote contract hook failed", "error", err)
 		return err
 	}
 
@@ -153,7 +158,8 @@ func (h GovHooks) AfterProposalVotingPeriodEnded(ctx context.Context, proposalID
 	}
 
 	if err := h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz); err != nil {
-		_, err = fmt.Println("AfterProposalVotingPeriodEnded: ", err)
+		// SAF-04: see AfterProposalSubmission for rationale.
+		h.k.Logger(ctx).Error("AfterProposalVotingPeriodEnded contract hook failed", "error", err)
 		return err
 	}
 

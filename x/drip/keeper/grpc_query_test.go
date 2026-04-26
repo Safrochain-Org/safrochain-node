@@ -15,13 +15,6 @@ func (s *KeeperTestSuite) TestDripQueryParams() {
 		Expected types.Params
 	}{
 		{
-			desc: "On empty",
-			Expected: types.Params{
-				EnableDrip:       true,
-				AllowedAddresses: []string(nil),
-			},
-		},
-		{
 			desc: "off empty",
 			Expected: types.Params{
 				EnableDrip:       false,

@@ -8,8 +8,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+// SAF-06: the Drip module ships disabled by default. Previously it was enabled
+// at genesis with an empty AllowedAddresses list, which silently turned every
+// future allowlist addition into an immediate distribution authority. Operators
+// must now explicitly enable the module via governance after seeding the
+// AllowedAddresses list.
 var (
-	DefaultEnableDrip       = true
+	DefaultEnableDrip       = false
 	DefaultAllowedAddresses = []string(nil) // no one allowed
 )
 
@@ -59,7 +64,19 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	return assertValidAddresses(p.AllowedAddresses)
+	if err := assertValidAddresses(p.AllowedAddresses); err != nil {
+		return err
+	}
+
+	// SAF-06: when the module is enabled the allow-list must be non-empty,
+	// otherwise governance can later flip a single address into an
+	// unrestricted token-distribution authority without going through a
+	// second proposal that re-validates the params.
+	if p.EnableDrip && len(p.AllowedAddresses) == 0 {
+		return ErrEmptyAllowedAddresses
+	}
+
+	return nil
 }
 
 func assertValidAddresses(addrs []string) error {

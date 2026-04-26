@@ -39,7 +39,7 @@ func NewChangeRateDecorator(sk *stakingkeeper.Keeper) MsgChangeRateDecorator {
 // The AnteHandle checks for transactions that exceed the max change rate of 5% on the
 // creation of a validator.
 func (mcr MsgChangeRateDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (sdk.Context, error) {
-	err := mcr.hasInvalidCommissionRateMsgs(ctx, tx.GetMsgs())
+	err := mcr.hasInvalidCommissionRateMsgs(ctx, tx.GetMsgs(), 0)
 	if err != nil {
 		return ctx, err
 	}
@@ -47,19 +47,25 @@ func (mcr MsgChangeRateDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulat
 	return next(ctx, tx, simulate)
 }
 
-// Check if a tx's messages exceed a validator's max change rate
-func (mcr MsgChangeRateDecorator) hasInvalidCommissionRateMsgs(ctx sdk.Context, msgs []sdk.Msg) error {
+// hasInvalidCommissionRateMsgs walks msgs and recursively unwraps authz.MsgExec
+// wrappers to validate every nested staking message. Recursion is bounded by
+// MaxAuthzNestedMsgsDepth (SAF-05) to prevent stack-exhaustion DoS via deeply
+// nested authz transactions.
+func (mcr MsgChangeRateDecorator) hasInvalidCommissionRateMsgs(ctx sdk.Context, msgs []sdk.Msg, depth uint8) error {
+	if err := CheckAuthzDepth(depth); err != nil {
+		return err
+	}
+
 	for _, msg := range msgs {
 		// Check if an authz message, loop through all inner messages, and recursively call this function
 		if execMsg, ok := msg.(*authz.MsgExec); ok {
-			msgs, err := execMsg.GetMessages()
+			innerMsgs, err := execMsg.GetMessages()
 			if err != nil {
 				return err
 			}
 
 			// Recursively call this function with the inner messages
-			err = mcr.hasInvalidCommissionRateMsgs(ctx, msgs)
-			if err != nil {
+			if err := mcr.hasInvalidCommissionRateMsgs(ctx, innerMsgs, depth+1); err != nil {
 				return err
 			}
 		}

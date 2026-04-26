@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"context"
+	"math/bits"
 
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 
@@ -16,6 +17,11 @@ import (
 	globalerrors "github.com/Safrochain_Org/safrochain/app/helpers"
 	"github.com/Safrochain_Org/safrochain/x/feepay/types"
 )
+
+// MaxWalletLimit is the maximum number of times a single wallet may use
+// a FeePay-sponsored contract. The cap is enforced both at registration
+// (RegisterContract) and on subsequent updates (UpdateContractWalletLimit).
+const MaxWalletLimit uint64 = 1_000_000
 
 // Check if a contract is registered as a fee pay contract
 func (k Keeper) IsContractRegistered(ctx context.Context, contractAddr string) bool {
@@ -103,7 +109,7 @@ func (k Keeper) RegisterContract(ctx context.Context, rfp *types.MsgRegisterFeeP
 		return err
 	}
 
-	if rfp.FeePayContract.WalletLimit > 1_000_000 {
+	if rfp.FeePayContract.WalletLimit > MaxWalletLimit {
 		return types.ErrInvalidWalletLimit
 	}
 
@@ -179,9 +185,13 @@ func (k Keeper) UnregisterContract(ctx context.Context, rfp *types.MsgUnregister
 	prefixStore := prefix.NewStore(store, StoreKeyContracts)
 	prefixStore.Delete([]byte(rfp.ContractAddress))
 
-	// Remove all usage entries for contract
+	// Remove all usage entries for contract.
+	// SAF-01: ensure the iterator is closed to avoid leaking the underlying
+	// resources (file descriptors / cache buffers) if this function exits
+	// early or panics during iteration.
 	prefixStore = prefix.NewStore(store, StoreKeyContractUses)
 	iterator := storetypes.KVStorePrefixIterator(prefixStore, []byte(rfp.ContractAddress))
+	defer iterator.Close() //nolint:errcheck
 
 	for ; iterator.Valid(); iterator.Next() {
 		store.Delete(iterator.Key())
@@ -228,13 +238,27 @@ func (k Keeper) FundContract(ctx context.Context, fpc *types.FeePayContract, sen
 		return types.ErrInvalidSafrochainFundAmount.Wrapf("contract must be funded with '%s'", k.bondDenom)
 	}
 
-	// Transfer from sender to module
-	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, senderAddr, types.ModuleName, coins); err != nil {
+	// SAF-02: guard against uint64 overflow when crediting the contract
+	// balance. Without this check, a sufficiently large transfer could wrap
+	// the stored balance back to a small value, effectively draining the
+	// contract treasury.
+	transferAmt := transferCoin.Amount.Uint64()
+	sum, carry := bits.Add64(fpc.Balance, transferAmt, 0)
+	if carry != 0 {
+		return types.ErrInvalidSafrochainFundAmount.Wrapf(
+			"funding overflows uint64 balance: current=%d, deposit=%d", fpc.Balance, transferAmt,
+		)
+	}
+
+	// SAF-11: only transfer the filtered bond-denom coin into the module
+	// account. Sending the full `coins` set previously locked any non-bond
+	// denoms inside the FeePay module forever (no withdrawal path exists).
+	bondCoins := sdk.NewCoins(transferCoin)
+	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, senderAddr, types.ModuleName, bondCoins); err != nil {
 		return err
 	}
 
-	// Increment the fpc balance
-	k.SetContractBalance(ctx, fpc, fpc.Balance+transferCoin.Amount.Uint64())
+	k.SetContractBalance(ctx, fpc, sum)
 	return nil
 }
 
@@ -295,8 +319,17 @@ func (k Keeper) HasWalletExceededUsageLimit(ctx context.Context, fpc *types.FeeP
 	return uses >= fpc.WalletLimit
 }
 
-// Update the wallet limit of an existing fee pay contract
+// Update the wallet limit of an existing fee pay contract.
+//
+// SAF-09: enforce the same 1,000,000 cap as RegisterContract. Without this
+// re-validation, a contract manager can raise the wallet limit to MaxUint64
+// after registration, which effectively removes the per-wallet rate limit
+// that the FeePay module relies on to throttle abuse.
 func (k Keeper) UpdateContractWalletLimit(ctx context.Context, fpc *types.FeePayContract, senderAddress string, walletLimit uint64) error {
+	if walletLimit > MaxWalletLimit {
+		return types.ErrInvalidWalletLimit
+	}
+
 	// Check if a cw contract
 	contractAddr, err := sdk.AccAddressFromBech32(fpc.ContractAddress)
 	if err != nil {
