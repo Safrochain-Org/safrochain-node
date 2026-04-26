@@ -51,9 +51,10 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
 	"github.com/cosmos/cosmos-sdk/x/gov"
-
 	// "github.com/cosmos/cosmos-sdk/x/gov"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	mint "github.com/cosmos/cosmos-sdk/x/mint"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	"github.com/cosmos/cosmos-sdk/x/params"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/cosmos/cosmos-sdk/x/slashing"
@@ -75,9 +76,6 @@ import (
 	globalfeetypes "github.com/Safrochain_Org/safrochain/x/globalfee/types"
 	tokenfactorymodule "github.com/Safrochain_Org/safrochain/x/tokenfactory/module"
 	tokenfactorytypes "github.com/Safrochain_Org/safrochain/x/tokenfactory/types"
-	mint "github.com/cosmos/cosmos-sdk/x/mint"
-	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
-
 	// wrappers
 	wrappedgovmodule "github.com/Safrochain_Org/safrochain/x/wrappers/gov/module"
 )

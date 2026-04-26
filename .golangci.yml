@@ -62,6 +62,16 @@ linters:
           disabled: true
         - name: deep-exit
           disabled: true
+        # The Cosmos SDK convention is to put types in a package literally
+        # named "types"; revive's var-naming rule flags that as a meaningless
+        # package name. Keeping the rule disabled is the lesser evil.
+        - name: var-naming
+          disabled: true
+        # Cosmos SDK and CosmWasm code uses many exhaustive type switches
+        # over sealed interfaces (e.g. proto Any unpacking) where a default
+        # case would be unreachable; the rule is more noise than signal here.
+        - name: enforce-switch-style
+          disabled: true
     gosec:
       excludes:
         - G404
@@ -73,9 +83,10 @@ linters:
         - printf
   exclusions:
     paths:
-      - ".*.pb.go"
-      - ".*.pb.gw.go"
-      - "./api/*.*"
+      - ".*\\.pb\\.go$"
+      - ".*\\.pb\\.gw\\.go$"
+      - ".*\\.pulsar\\.go$"
+      - "^api/"
 
 formatters:
   enable:

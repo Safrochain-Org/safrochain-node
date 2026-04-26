@@ -241,7 +241,7 @@ func DeductFees(bankKeeper authtypes.BankKeeper, ctx sdk.Context, acc sdk.Accoun
 }
 
 // from the SDK pulled out
-func (dfd DeductFeeDecorator) checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.Tx) (sdk.Coins, int64, error) {
+func (DeductFeeDecorator) checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, tx sdk.Tx) (sdk.Coins, int64, error) {
 	feeTx, ok := tx.(sdk.FeeTx)
 	if !ok {
 		return nil, 0, errorsmod.Wrap(sdkerrors.ErrTxDecode, "Tx must be a FeeTx")
