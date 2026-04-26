@@ -131,7 +131,7 @@ If you are running a Safrochain validator or full node, follow these security gu
 
 The following mitigations are already applied in this codebase:
 
-- **GHSA-h395-qcrw-5vmq** — Patched via `github.com/gin-gonic/gin v1.7.0` (see `go.mod`).
+- **GHSA-h395-qcrw-5vmq** — Mitigated by upgrading `github.com/gin-gonic/gin` to a currently maintained version (see `go.mod` for the exact pinned version).
 - **Broken goleveldb** — Replaced with `github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7`.
 
 ---
