@@ -21,7 +21,7 @@ func (s *KeeperTestSuite) TestClockInitGenesis() {
 			"Success - Custom Genesis",
 			types.GenesisState{
 				Params: types.Params{
-					ContractGasLimit: 500_000,
+					ContractGasLimit: 5_000_000,
 				},
 			},
 			true,

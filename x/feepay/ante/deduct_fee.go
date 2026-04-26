@@ -36,10 +36,13 @@ type DeductFeeDecorator struct {
 	bankKeeper      bankkeeper.Keeper
 	feegrantKeeper  ante.FeegrantKeeper
 	bondDenom       string
-	isFeePayTx      *bool
 }
 
-func NewDeductFeeDecorator(fpk feepaykeeper.Keeper, gfk globalfeekeeper.Keeper, ak ante.AccountKeeper, bk bankkeeper.Keeper, fgk ante.FeegrantKeeper, bondDenom string, isFeePayTx *bool) DeductFeeDecorator {
+// NewDeductFeeDecorator constructs a DeductFeeDecorator. The previous
+// `isFeePayTx *bool` argument was removed in favour of per-transaction
+// state stored on sdk.Context (SAF-08); the FeeRouteDecorator allocates
+// that state and downstream decorators read it via feepayhelpers.
+func NewDeductFeeDecorator(fpk feepaykeeper.Keeper, gfk globalfeekeeper.Keeper, ak ante.AccountKeeper, bk bankkeeper.Keeper, fgk ante.FeegrantKeeper, bondDenom string) DeductFeeDecorator {
 	return DeductFeeDecorator{
 		feepayKeeper:    fpk,
 		globalfeeKeeper: gfk,
@@ -47,7 +50,6 @@ func NewDeductFeeDecorator(fpk feepaykeeper.Keeper, gfk globalfeekeeper.Keeper, 
 		bankKeeper:      bk,
 		feegrantKeeper:  fgk,
 		bondDenom:       bondDenom,
-		isFeePayTx:      isFeePayTx,
 	}
 }
 
@@ -120,14 +122,18 @@ func (dfd DeductFeeDecorator) checkDeductFee(ctx sdk.Context, sdkTx sdk.Tx, fee 
 	var feePayErr error
 	var sdkErr error
 
+	state := feepaytypes.GetFeePayTxState(ctx)
+
 	// First try to handle FeePay transactions, if error, try the std sdk route.
 	// If not a FeePay transaction, default to the std sdk route.
-	if *dfd.isFeePayTx {
+	if state.IsFeePayTx() {
 		// If the fee pay route fails, try the std sdk route
 		feePayErr = dfd.handleZeroFees(ctx, deductFeesFromAcc, sdkTx, fee)
 		if feePayErr != nil {
-			// Flag the tx to be processed by GlobalFee
-			*dfd.isFeePayTx = false
+			// Flag the tx to be processed by GlobalFee for the remaining
+			// decorators in this transaction (SAF-08: scoped to the per-tx
+			// state instance, not a globally shared pointer).
+			state.SetFeePayTx(false)
 
 			// call GlobalFee handler here
 			sdkErr = DeductFees(dfd.bankKeeper, ctx, deductFeesFromAcc, fee)
@@ -247,7 +253,7 @@ func (dfd DeductFeeDecorator) checkTxFeeWithValidatorMinGasPrices(ctx sdk.Contex
 	// Ensure that the provided fees meet a minimum threshold for the validator,
 	// if this is a CheckTx. This is only for local mempool purposes, and thus
 	// is only ran on check tx.
-	if ctx.IsCheckTx() && !*dfd.isFeePayTx {
+	if ctx.IsCheckTx() && !feepaytypes.GetFeePayTxState(ctx).IsFeePayTx() {
 		minGasPrices := ctx.MinGasPrices()
 		if !minGasPrices.IsZero() {
 			requiredFees := make(sdk.Coins, len(minGasPrices))

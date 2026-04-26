@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/authz"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 
+	"github.com/Safrochain_Org/safrochain/app/decorators"
 	"github.com/Safrochain_Org/safrochain/x/feeshare/keeper"
 	"github.com/Safrochain_Org/safrochain/x/feeshare/types"
 )
@@ -66,10 +67,14 @@ type FeeSharePayoutEventOutput struct {
 	FeesPaid        sdk.Coins      `json:"fees_paid"`
 }
 
-// Loop through all messages and add the withdraw address to the list of addresses to pay
-// if the contract opted-in to fee sharing
-func addNewFeeSharePayoutsForMsgs(ctx sdk.Context, fsk keeper.Keeper, toPay *[]sdk.AccAddress, msgs []sdk.Msg) error {
-	// Check if an authz message, loop through all inner messages, and recursively call this function
+// addNewFeeSharePayoutsForMsgs walks msgs (recursively unwrapping authz.MsgExec
+// up to MaxAuthzNestedMsgsDepth – see SAF-05) and appends every withdraw address
+// that has opted-in to fee sharing.
+func addNewFeeSharePayoutsForMsgs(ctx sdk.Context, fsk keeper.Keeper, toPay *[]sdk.AccAddress, msgs []sdk.Msg, depth uint8) error {
+	if err := decorators.CheckAuthzDepth(depth); err != nil {
+		return err
+	}
+
 	for _, msg := range msgs {
 		if authzMsg, ok := msg.(*authz.MsgExec); ok {
 			innerMsgs, err := authzMsg.GetMessages()
@@ -77,9 +82,7 @@ func addNewFeeSharePayoutsForMsgs(ctx sdk.Context, fsk keeper.Keeper, toPay *[]s
 				return errorsmod.Wrapf(sdkerrors.ErrUnauthorized, "cannot unmarshal authz exec msgs")
 			}
 
-			// Recursively call this function with the inner messages
-			err = addNewFeeSharePayoutsForMsgs(ctx, fsk, toPay, innerMsgs)
-			if err != nil {
+			if err := addNewFeeSharePayoutsForMsgs(ctx, fsk, toPay, innerMsgs, depth+1); err != nil {
 				return err
 			}
 		}
@@ -116,7 +119,7 @@ func (FeeSharePayoutDecorator) FeeSharePayout(ctx sdk.Context, bankKeeper bankke
 	toPay := make([]sdk.AccAddress, 0)
 
 	// Add fee share payouts for each msg
-	err := addNewFeeSharePayoutsForMsgs(ctx, fsk, &toPay, msgs)
+	err := addNewFeeSharePayoutsForMsgs(ctx, fsk, &toPay, msgs, 0)
 	if err != nil {
 		return err
 	}
@@ -148,18 +151,24 @@ func (FeeSharePayoutDecorator) FeeSharePayout(ctx sdk.Context, bankKeeper bankke
 		govPercent := params.DeveloperShares
 		splitFees := FeePayLogic(fees, govPercent, numPairs)
 
-		// pay fees evenly between all withdraw addresses
+		// SAF-07: execute the fan-out payout inside a cached sub-context and
+		// only commit the writes once every transfer succeeds. Without this
+		// guard, a failure mid-loop would leave earlier withdraw addresses
+		// already credited (because the parent ante context does not always
+		// roll back on a returned error – e.g. when callers wrap the ante in
+		// their own cache for simulation purposes), producing inconsistent
+		// partial payouts.
+		cacheCtx, write := ctx.CacheContext()
 		for i, withdrawAddr := range toPay {
-			err := bankKeeper.SendCoinsFromModuleToAccount(ctx, authtypes.FeeCollectorName, withdrawAddr, splitFees)
+			if err := bankKeeper.SendCoinsFromModuleToAccount(cacheCtx, authtypes.FeeCollectorName, withdrawAddr, splitFees); err != nil {
+				return errorsmod.Wrapf(types.ErrFeeSharePayment, "failed to pay fees to contract developer: %s", err.Error())
+			}
 			feesPaidOutput[i] = FeeSharePayoutEventOutput{
 				WithdrawAddress: withdrawAddr,
 				FeesPaid:        splitFees,
 			}
-
-			if err != nil {
-				return errorsmod.Wrapf(types.ErrFeeSharePayment, "failed to pay fees to contract developer: %s", err.Error())
-			}
 		}
+		write()
 	}
 
 	bz, err := json.Marshal(feesPaidOutput)

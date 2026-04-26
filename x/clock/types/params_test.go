@@ -21,12 +21,17 @@ func TestParamsValidate(t *testing.T) {
 		},
 		{
 			"Success - Meets min Gas",
-			types.NewParams(100_000),
+			types.NewParams(types.MinContractGasLimit),
 			true,
 		},
 		{
-			"Success - Meets min Gas",
-			types.NewParams(500_000),
+			"Success - Within range",
+			types.NewParams(5_000_000),
+			true,
+		},
+		{
+			"Success - At max",
+			types.NewParams(types.MaxContractGasLimit),
 			true,
 		},
 		{
@@ -47,6 +52,16 @@ func TestParamsValidate(t *testing.T) {
 		{
 			"Fail - Not Enough Gas",
 			types.NewParams(10_000),
+			false,
+		},
+		{
+			"Fail - Below new minimum (legacy 100k)",
+			types.NewParams(100_000),
+			false,
+		},
+		{
+			"Fail - Above max",
+			types.NewParams(types.MaxContractGasLimit + 1),
 			false,
 		},
 	}

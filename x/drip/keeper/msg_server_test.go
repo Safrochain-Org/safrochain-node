@@ -101,10 +101,12 @@ func (s *KeeperTestSuite) TestUpdateDripParams() {
 		success          bool
 	}{
 		{
-			desc:             "Success - Valid on",
+			// SAF-06: enabling drip with an empty allow-list is no longer
+			// accepted; operators must seed AllowedAddresses first.
+			desc:             "Fail - Enabled with empty allow-list (SAF-06)",
 			isEnabled:        true,
 			AllowedAddresses: []string{},
-			success:          true,
+			success:          false,
 		},
 		{
 			desc:             "Success - Valid off",

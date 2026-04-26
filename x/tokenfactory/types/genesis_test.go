@@ -5,7 +5,23 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
 	"github.com/Safrochain_Org/safrochain/x/tokenfactory/types"
+)
+
+// Configure the global Bech32 prefix to match the live chain (addr_safro)
+// so factory denom validation parses test creator/admin addresses with
+// the same prefix the rest of the codebase uses.
+func init() {
+	cfg := sdk.GetConfig()
+	cfg.SetBech32PrefixForAccount("addr_safro", "addr_safropub")
+}
+
+// Reusable test addresses with the addr_safro prefix.
+const (
+	tfTestCreator   = "addr_safro1ksw2e59xqrkj8cju74fet6tz8etkjg29uflsey"
+	tfTestDiffAdmin = "addr_safro1m502pj7dp6csn6ufqfdvxfru8rgtlfmaun00t5"
 )
 
 func TestGenesisState_Validate(t *testing.T) {
@@ -24,9 +40,9 @@ func TestGenesisState_Validate(t *testing.T) {
 			genState: &types.GenesisState{
 				FactoryDenoms: []types.GenesisDenom{
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/bitcoin",
+						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
-							Admin: "cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8",
+							Admin: tfTestCreator,
 						},
 					},
 				},
@@ -38,9 +54,9 @@ func TestGenesisState_Validate(t *testing.T) {
 			genState: &types.GenesisState{
 				FactoryDenoms: []types.GenesisDenom{
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/bitcoin",
+						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
-							Admin: "cosmos1ft6e5esdtdegnvcr3djd3ftk4kwpcr6jta8eyh",
+							Admin: tfTestDiffAdmin,
 						},
 					},
 				},
@@ -52,7 +68,7 @@ func TestGenesisState_Validate(t *testing.T) {
 			genState: &types.GenesisState{
 				FactoryDenoms: []types.GenesisDenom{
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/bitcoin",
+						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
 							Admin: "",
 						},
@@ -66,7 +82,7 @@ func TestGenesisState_Validate(t *testing.T) {
 			genState: &types.GenesisState{
 				FactoryDenoms: []types.GenesisDenom{
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/bitcoin",
+						Denom: "factory/" + tfTestCreator + "/bitcoin",
 					},
 				},
 			},
@@ -77,7 +93,7 @@ func TestGenesisState_Validate(t *testing.T) {
 			genState: &types.GenesisState{
 				FactoryDenoms: []types.GenesisDenom{
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/bitcoin",
+						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
 							Admin: "moose",
 						},
@@ -91,13 +107,13 @@ func TestGenesisState_Validate(t *testing.T) {
 			genState: &types.GenesisState{
 				FactoryDenoms: []types.GenesisDenom{
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/bitcoin",
+						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
 							Admin: "",
 						},
 					},
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/litecoin",
+						Denom: "factory/" + tfTestCreator + "/litecoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
 							Admin: "",
 						},
@@ -111,13 +127,13 @@ func TestGenesisState_Validate(t *testing.T) {
 			genState: &types.GenesisState{
 				FactoryDenoms: []types.GenesisDenom{
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/bitcoin",
+						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
 							Admin: "",
 						},
 					},
 					{
-						Denom: "factory/cosmos1t7egva48prqmzl59x5ngv4zx0dtrwewcdqdjr8/bitcoin",
+						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
 							Admin: "",
 						},

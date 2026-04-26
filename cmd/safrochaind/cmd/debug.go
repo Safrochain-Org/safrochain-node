@@ -136,7 +136,7 @@ Example:
 		},
 	}
 
-	cmd.Flags().StringP(flagBech32Prefix, "p", "safrochain", "Bech32 Prefix to encode to")
+	cmd.Flags().StringP(flagBech32Prefix, "p", Bech32Prefix, "Bech32 Prefix to encode to")
 
 	return cmd
 }

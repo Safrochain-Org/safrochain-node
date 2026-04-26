@@ -20,10 +20,10 @@ func TestFeeShareSuite(t *testing.T) {
 }
 
 func (suite *FeeShareTestSuite) SetupTest() {
-	suite.address1 = sdk.AccAddress([]byte("cosmos1"))
-	suite.address2 = sdk.AccAddress([]byte("cosmos2"))
+	suite.address1 = sdk.AccAddress([]byte("addr_safro1"))
+	suite.address2 = sdk.AccAddress([]byte("addr_safro2"))
 
-	suite.contract = sdk.AccAddress([]byte("cosmos1contract"))
+	suite.contract = sdk.AccAddress([]byte("addr_safro1contract"))
 }
 
 func (suite *FeeShareTestSuite) TestFeeNew() {
@@ -85,7 +85,9 @@ func (suite *FeeShareTestSuite) TestFee() {
 			true,
 		},
 		{
-			"Create feeshare- invalid contract address (invalid length 2)",
+			// Wrong-prefix bech32 string: the chain expects addr_safro and
+			// rejects safrochain HRPs, so this exercises the prefix check.
+			"Create feeshare- invalid contract address (wrong prefix)",
 			FeeShare{
 				"safrochain15u3dt79t6sxxa3x3kpkhzsy56edaa5a66kxmukqjz2sx0hes5sn38g",
 				suite.address1.String(),
@@ -125,7 +127,7 @@ func (suite *FeeShareTestSuite) TestFee() {
 }
 
 func (suite *FeeShareTestSuite) TestFeeShareGetters() {
-	contract := sdk.AccAddress([]byte("cosmos1contract"))
+	contract := sdk.AccAddress([]byte("addr_safro1contract"))
 	fs := FeeShare{
 		contract.String(),
 		suite.address1.String(),

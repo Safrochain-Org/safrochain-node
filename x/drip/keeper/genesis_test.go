@@ -18,6 +18,11 @@ func (s *KeeperTestSuite) TestDripInitGenesis() {
 			false,
 		},
 		{
+			// SAF-06: enabling Drip with an empty allow-list must panic on
+			// genesis validation. Previously this configuration was treated
+			// as a benign "module is on, but no one can use it yet" state,
+			// which silently turned every later allow-list addition into an
+			// immediate distribution authority.
 			"custom genesis - drip enabled, no one allowed",
 			types.GenesisState{
 				Params: types.Params{
@@ -25,14 +30,14 @@ func (s *KeeperTestSuite) TestDripInitGenesis() {
 					AllowedAddresses: []string(nil),
 				},
 			},
-			false,
+			true,
 		},
 		{
 			"custom genesis - drip enabled, only one addr allowed",
 			types.GenesisState{
 				Params: types.Params{
 					EnableDrip:       true,
-					AllowedAddresses: []string{"safrochain1v6vlpuqlhhpwujvaqs4pe5dmljapdev4s827ql"},
+					AllowedAddresses: []string{"addr_safro1vc2894vzx0j74yqvg6yvt23stmeyx6pa6xfjf0"},
 				},
 			},
 			false,
@@ -42,7 +47,10 @@ func (s *KeeperTestSuite) TestDripInitGenesis() {
 			types.GenesisState{
 				Params: types.Params{
 					EnableDrip:       true,
-					AllowedAddresses: []string{"safrochain1v6vlpuqlhhpwujvaqs4pe5dmljapdev4s827ql", "safrochain1hq2p69p4kmwndxlss7dqk0sr5pe5mmcpf7wqec"},
+					AllowedAddresses: []string{
+						"addr_safro1vc2894vzx0j74yqvg6yvt23stmeyx6pa6xfjf0",
+						"addr_safro15ew2xgxp3xc7esguq5yz4ymekru8357xvw73k0",
+					},
 				},
 			},
 			false,
@@ -52,7 +60,7 @@ func (s *KeeperTestSuite) TestDripInitGenesis() {
 			types.GenesisState{
 				Params: types.Params{
 					EnableDrip:       true,
-					AllowedAddresses: []string{"safrochain1v6vllollollollollolloldmljapdev4s827ql"},
+					AllowedAddresses: []string{"addr_safro1v6vllollollollollolloldmljapdev4s827ql"},
 				},
 			},
 			true,

@@ -9,24 +9,32 @@ import (
 
 func (s *KeeperTestSuite) TestGenesis() {
 	s.SetupTestForInitGenesis()
+	// Bech32 addresses use the chain's configured account prefix
+	// (addr_safro). Using any other prefix or an invalid checksum makes
+	// InitGenesis panic when the tokenfactory keeper round-trips each
+	// denom's creator/admin through sdk.AccAddressFromBech32.
+	const (
+		creator   = "addr_safro1ksw2e59xqrkj8cju74fet6tz8etkjg29uflsey"
+		diffAdmin = "addr_safro1m502pj7dp6csn6ufqfdvxfru8rgtlfmaun00t5"
+	)
 	genesisState := types.GenesisState{
 		FactoryDenoms: []types.GenesisDenom{
 			{
-				Denom: "factory/safrochain1t7egva48prqmzl59x5ngv4zx0dtrwewcmjwfym/bitcoin",
+				Denom: "factory/" + creator + "/bitcoin",
 				AuthorityMetadata: types.DenomAuthorityMetadata{
-					Admin: "safrochain1t7egva48prqmzl59x5ngv4zx0dtrwewcmjwfym",
+					Admin: creator,
 				},
 			},
 			{
-				Denom: "factory/safrochain1t7egva48prqmzl59x5ngv4zx0dtrwewcmjwfym/diff-admin",
+				Denom: "factory/" + creator + "/diff-admin",
 				AuthorityMetadata: types.DenomAuthorityMetadata{
-					Admin: "safrochain15czt5nhlnvayqq37xun9s9yus0d6y26dsvkcna",
+					Admin: diffAdmin,
 				},
 			},
 			{
-				Denom: "factory/safrochain1t7egva48prqmzl59x5ngv4zx0dtrwewcmjwfym/litecoin",
+				Denom: "factory/" + creator + "/litecoin",
 				AuthorityMetadata: types.DenomAuthorityMetadata{
-					Admin: "safrochain1t7egva48prqmzl59x5ngv4zx0dtrwewcmjwfym",
+					Admin: creator,
 				},
 			},
 		},

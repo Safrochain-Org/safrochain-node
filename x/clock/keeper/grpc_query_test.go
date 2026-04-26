@@ -20,15 +20,15 @@ func (s *KeeperTestSuite) TestQueryClockParams() {
 			params: types.DefaultParams(),
 		},
 		{
-			desc: "On 500_000",
+			desc: "On 1_000_000 (minimum)",
 			params: types.Params{
-				ContractGasLimit: 500_000,
+				ContractGasLimit: 1_000_000,
 			},
 		},
 		{
-			desc: "On 1_000_000",
+			desc: "On 5_000_000",
 			params: types.Params{
-				ContractGasLimit: 1_000_000,
+				ContractGasLimit: 5_000_000,
 			},
 		},
 	} {
