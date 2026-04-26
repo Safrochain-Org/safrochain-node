@@ -97,6 +97,16 @@ jobs:
           docker image load -i ${{ env.TAR_PATH }}
           docker image ls -a
 
+      # Some upgrade tests (e.g. ictest-gov-fix, ictest-upgrade) pull prior
+      # chain versions from ghcr.io. Authenticate so private packages in the
+      # same org are reachable.
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run Test
         id: run_test
         continue-on-error: true

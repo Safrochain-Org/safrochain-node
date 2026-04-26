@@ -30,7 +30,7 @@ var (
 	MaxDepositPeriod = "10s"
 	Denom            = "usaf"
 
-	SafrochainMainRepo                = "ghcr.io/Safrochain_Org/safrochain"
+	SafrochainMainRepo                = "ghcr.io/safrochain_org/safrochain"
 	safrochainRepo, safrochainVersion = GetDockerImageInfo()
 
 	SafrochainImage = ibc.DockerImage{
@@ -65,7 +65,7 @@ var (
 		ChainID:             "safrochain-2",
 		Images:              []ibc.DockerImage{SafrochainImage},
 		Bin:                 "safrochaind",
-		Bech32Prefix:        "safrochain",
+		Bech32Prefix:        "addr_safro",
 		Denom:               Denom,
 		CoinType:            "118",
 		GasPrices:           fmt.Sprintf("0%s", Denom),
@@ -83,7 +83,7 @@ var (
 		ChainID:             "ibc-1",
 		Images:              []ibc.DockerImage{SafrochainImage},
 		Bin:                 "safrochaind",
-		Bech32Prefix:        "safrochain",
+		Bech32Prefix:        "addr_safro",
 		Denom:               "usaf",
 		CoinType:            "118",
 		GasPrices:           fmt.Sprintf("0%s", Denom),
@@ -99,10 +99,18 @@ var (
 )
 
 func init() {
-	sdk.GetConfig().SetBech32PrefixForAccount("safrochain", "safrochain")
-	sdk.GetConfig().SetBech32PrefixForValidator("safrochainvaloper", "safrochain")
-	sdk.GetConfig().SetBech32PrefixForConsensusNode("safrochainvalcons", "safrochain")
-	sdk.GetConfig().SetCoinType(118)
+	const accountPrefix = "addr_safro"
+	cfg := sdk.GetConfig()
+	cfg.SetBech32PrefixForAccount(accountPrefix, accountPrefix+sdk.PrefixPublic)
+	cfg.SetBech32PrefixForValidator(
+		accountPrefix+sdk.PrefixValidator+sdk.PrefixOperator,
+		accountPrefix+sdk.PrefixValidator+sdk.PrefixOperator+sdk.PrefixPublic,
+	)
+	cfg.SetBech32PrefixForConsensusNode(
+		accountPrefix+sdk.PrefixValidator+sdk.PrefixConsensus,
+		accountPrefix+sdk.PrefixValidator+sdk.PrefixConsensus+sdk.PrefixPublic,
+	)
+	cfg.SetCoinType(118)
 }
 
 // safrochainEncoding registers the Safrochain specific module codecs so that the associated types and msgs
