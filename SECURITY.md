@@ -110,7 +110,7 @@ If you are running a Safrochain validator or full node, follow these security gu
 - Back up your keyring securely and store backups offline.
 
 ### Node Configuration
-- Set `pex = true` carefully and restrict `persistent_peers` to trusted nodes.
+- Configure peer exchange (`pex`) based on node role: use `pex = true` on public/sentry nodes that need dynamic peer discovery, but prefer `pex = false` on validators/private nodes and rely on trusted `persistent_peers` (reduces exposure to malicious peers, peer poisoning, and eclipse-style isolation attempts).
 - Enable `addr_book_strict = true` to prevent IP spoofing.
 - Use TLS for RPC and REST endpoints when exposed externally.
 - Configure rate-limiting on public-facing APIs.
@@ -131,7 +131,7 @@ If you are running a Safrochain validator or full node, follow these security gu
 
 The following mitigations are already applied in this codebase:
 
-- **GHSA-h395-qcrw-5vmq** — Patched via `github.com/gin-gonic/gin v1.7.0` (see `go.mod`).
+- **GHSA-h395-qcrw-5vmq** — Mitigated by upgrading `github.com/gin-gonic/gin` to a currently maintained version (see `go.mod` for the exact pinned version).
 - **Broken goleveldb** — Replaced with `github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7`.
 
 ---
