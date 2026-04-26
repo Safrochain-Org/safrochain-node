@@ -13,7 +13,7 @@ IMAGE="messense/rust-musl-cross:x86_64-musl"
 docker run --rm -v $(pwd):/volume -w /volume \
   -e GOOS=linux -e GOARCH=amd64 -e CGO_ENABLED=1 \
   -e CC=x86_64-linux-musl-gcc \
-  golang:1.23.9 \
+  golang:1.25.8 \
   sh -c "apt update && apt install -y musl-tools && go build -o ${APP_NAME}_linux_amd64 ./cmd/safrochaind"
 
 tar -czvf ${VERSION}_linux_amd64.tar.gz ${APP_NAME}_linux_amd64
