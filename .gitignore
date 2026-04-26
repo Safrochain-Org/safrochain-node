@@ -4,3 +4,11 @@ bin
 heighliner*
 !scripts/heighliner
 build/
+
+# Local agent / tooling artifacts
+.claude/
+.cursor/
+
+# Local audit / report artifacts
+*.docx
+*.pdf

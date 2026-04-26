@@ -46,7 +46,7 @@ func (s *KeeperTestSuite) TestDripInitGenesis() {
 			"custom genesis - drip enabled, 2 addr allowed",
 			types.GenesisState{
 				Params: types.Params{
-					EnableDrip:       true,
+					EnableDrip: true,
 					AllowedAddresses: []string{
 						"addr_safro1vc2894vzx0j74yqvg6yvt23stmeyx6pa6xfjf0",
 						"addr_safro15ew2xgxp3xc7esguq5yz4ymekru8357xvw73k0",

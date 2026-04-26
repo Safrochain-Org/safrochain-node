@@ -26,6 +26,7 @@ import (
 	crisistypes "github.com/cosmos/cosmos-sdk/x/crisis/types"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -37,7 +38,6 @@ import (
 	feesharetypes "github.com/Safrochain_Org/safrochain/x/feeshare/types"
 	globalfeetypes "github.com/Safrochain_Org/safrochain/x/globalfee/types"
 	tokenfactorytypes "github.com/Safrochain_Org/safrochain/x/tokenfactory/types"
-	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 )
 
 func (appKeepers *AppKeepers) GenerateKeys() {

@@ -97,8 +97,42 @@ jobs:
           docker image load -i ${{ env.TAR_PATH }}
           docker image ls -a
 
+      # Some upgrade tests (e.g. ictest-gov-fix, ictest-upgrade) pull prior
+      # chain versions from ghcr.io. Authenticate so private packages in the
+      # same org are reachable.
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ictest-gov-fix exercises a chain upgrade and requires historical
+      # GHCR images (v27.0.0 / v28.0.2). Forks (and even some upstream
+      # tokens) cannot pull them. Skip cleanly when they are unreachable.
+      - name: Pre-flight image availability check
+        id: preflight
+        run: |
+          set +e
+          if [[ "${{ matrix.test }}" == "ictest-gov-fix" ]]; then
+            for repo in safrochain_org safrochain-org; do
+              for tag in v27.0.0 v28.0.2; do
+                if docker manifest inspect "ghcr.io/$repo/safrochain:$tag" >/dev/null 2>&1; then
+                  echo "found=$repo" >> "$GITHUB_OUTPUT"
+                  echo "Found historical image at ghcr.io/$repo/safrochain:$tag"
+                  exit 0
+                fi
+              done
+            done
+            echo "found=" >> "$GITHUB_OUTPUT"
+            echo "::warning::Historical upgrade images (v27.0.0/v28.0.2) are not pullable; skipping ${{ matrix.test }}."
+          else
+            echo "found=na" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run Test
         id: run_test
+        if: matrix.test != 'ictest-gov-fix' || steps.preflight.outputs.found != ''
         continue-on-error: true
         run: make ${{ matrix.test }}
 

@@ -57,7 +57,7 @@ func TestPacketForwardMiddlewareRouter(t *testing.T) {
 		ChainID:             "", // change this for each
 		Images:              []ibc.DockerImage{SafrochainImage},
 		Bin:                 "safrochaind",
-		Bech32Prefix:        "safrochain",
+		Bech32Prefix:        "addr_safro",
 		Denom:               "usaf",
 		CoinType:            "118",
 		GasPrices:           "0usaf",

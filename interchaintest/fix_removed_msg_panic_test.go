@@ -142,7 +142,7 @@ func SubmitBuilderParamsUpdate(t *testing.T, ctx context.Context, chain *cosmos.
 		"Summary desc",
 		"ipfs://CID",
 		fmt.Sprintf(`500000000%s`, chain.Config().Denom),
-		sdk.MustBech32ifyAddressBytes("safrochain", user.Address()),
+		sdk.MustBech32ifyAddressBytes("addr_safro", user.Address()),
 		false)
 	require.NoError(t, err, "error building proposal")
 
