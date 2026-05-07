@@ -88,26 +88,27 @@ define BANNER
 endef
 export BANNER
 
-# Pretty-print the build/install summary. Inputs: $(SUMMARY_KIND), $(SUMMARY_BIN).
+# Pretty-print the build/install summary. Inputs: $(SUMMARY_KIND), $(SUMMARY_BIN), $(SUMMARY_RUN).
 print-summary:
-	@printf '$(C_CYAN)%s$(C_RESET)' "$$BANNER"
+	@printf '\n$(C_CYAN)%s$(C_RESET)' "$$BANNER"
 	@printf '$(C_DIM)        Sovereign blockchain · powered by the Cosmos SDK$(C_RESET)\n\n'
-	@printf '$(C_BOLD)╔════════════════════════ %s Summary ════════════════════════╗$(C_RESET)\n' "$(SUMMARY_KIND)"
-	@printf '$(C_BOLD)║$(C_RESET)  $(C_GREEN)●$(C_RESET) safrochaind   $(C_YELLOW)%s$(C_RESET)\n' "$(VERSION)"
-	@printf '$(C_BOLD)║$(C_RESET)  $(C_GREEN)●$(C_RESET) Cosmos SDK    $(C_YELLOW)%s$(C_RESET)\n' "$(COSMOS_SDK_VERSION)"
-	@printf '$(C_BOLD)║$(C_RESET)  $(C_GREEN)●$(C_RESET) CometBFT      $(C_YELLOW)%s$(C_RESET)\n' "$(CMT_VERSION)"
-	@printf '$(C_BOLD)║$(C_RESET)  $(C_GREEN)●$(C_RESET) Go runtime    $(C_YELLOW)%s$(C_RESET)\n' "$$(go version 2>/dev/null | awk '{print $$3, $$4}')"
-	@printf '$(C_BOLD)║$(C_RESET)  $(C_GREEN)●$(C_RESET) Build tags    $(C_GREY)%s$(C_RESET)\n' "$(build_tags_comma_sep)"
-	@printf '$(C_BOLD)║$(C_RESET)  $(C_GREEN)●$(C_RESET) Commit        $(C_GREY)%s$(C_RESET)\n' "$$(echo $(COMMIT) | cut -c1-12)"
+	@printf '$(C_BOLD)┌──────────────────────────────────────────────────────────────────$(C_RESET)\n'
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_MAGENTA)$(C_BOLD)✨  %s COMPLETE$(C_RESET)\n' "$(SUMMARY_KIND)"
+	@printf '$(C_BOLD)├──────────────────────────────────────────────────────────────────$(C_RESET)\n'
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  safrochaind   $(C_YELLOW)%s$(C_RESET)\n' "$(VERSION)"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Cosmos SDK    $(C_YELLOW)%s$(C_RESET)\n' "$(COSMOS_SDK_VERSION)"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  CometBFT      $(C_YELLOW)%s$(C_RESET)\n' "$(CMT_VERSION)"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Go runtime    $(C_YELLOW)%s$(C_RESET)\n' "$$(go version 2>/dev/null | awk '{print $$3, $$4}')"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Build tags    $(C_GREY)%s$(C_RESET)\n' "$(build_tags_comma_sep)"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Commit        $(C_GREY)%s$(C_RESET)\n' "$$(echo $(COMMIT) | cut -c1-12)"
 	@if [ -n "$(SUMMARY_BIN)" ] && [ -e "$(SUMMARY_BIN)" ]; then \
 		size=$$(du -h "$(SUMMARY_BIN)" 2>/dev/null | awk '{print $$1}'); \
-		printf '$(C_BOLD)║$(C_RESET)  $(C_GREEN)●$(C_RESET) Binary        $(C_BLUE)%s$(C_RESET) $(C_DIM)(%s)$(C_RESET)\n' "$(SUMMARY_BIN)" "$$size"; \
+		printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Binary        $(C_BLUE)%s$(C_RESET) $(C_DIM)(%s)$(C_RESET)\n' "$(SUMMARY_BIN)" "$$size"; \
 	elif [ -n "$(SUMMARY_BIN)" ]; then \
-		printf '$(C_BOLD)║$(C_RESET)  $(C_GREEN)●$(C_RESET) Binary        $(C_BLUE)%s$(C_RESET)\n' "$(SUMMARY_BIN)"; \
+		printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Binary        $(C_BLUE)%s$(C_RESET)\n' "$(SUMMARY_BIN)"; \
 	fi
-	@printf '$(C_BOLD)╚═══════════════════════════════════════════════════════════════════╝$(C_RESET)\n\n'
-	@printf '  $(C_DIM)→ Run with:$(C_RESET) $(C_BOLD)%s start$(C_RESET)\n' "$(SUMMARY_RUN)"
-	@printf '  $(C_DIM)→ Docs:    $(C_RESET) $(C_BLUE)https://docs.safrochain.com$(C_RESET)\n\n'
+	@printf '$(C_BOLD)└──────────────────────────────────────────────────────────────────$(C_RESET)\n\n'
+	@printf '  $(C_DIM)→ Docs:     $(C_RESET) $(C_BLUE)https://docs.safrochain.com$(C_RESET)\n\n'
 
 verify:
 	@printf '$(C_CYAN)🔎 Verifying dependencies ...$(C_RESET)\n'
@@ -124,11 +125,13 @@ install: go-cache
 	@printf '$(C_CYAN)🔄 Installing safrochaind ...$(C_RESET)\n'
 	@go install $(BUILD_FLAGS) -mod=readonly ./cmd/safrochaind
 	@mkdir -p ./go/bin
-	@cp $$(go env GOBIN 2>/dev/null || echo $$(go env GOPATH)/bin)/safrochaind ./go/bin/safrochaind || true
-	@printf '$(C_GREEN)✅ Installed safrochaind successfully$(C_RESET)\n'
-	@$(MAKE) --no-print-directory print-summary \
-		SUMMARY_KIND="Install" \
-		SUMMARY_BIN="$$(go env GOBIN 2>/dev/null || echo $$(go env GOPATH)/bin)/safrochaind" \
+	@INSTALL_DIR="$$(go env GOBIN)"; \
+	[ -z "$$INSTALL_DIR" ] && INSTALL_DIR="$$(go env GOPATH)/bin"; \
+	cp "$$INSTALL_DIR/safrochaind" ./go/bin/safrochaind || true; \
+	printf '$(C_GREEN)✅ Installed safrochaind successfully$(C_RESET)\n'; \
+	$(MAKE) --no-print-directory print-summary \
+		SUMMARY_KIND="INSTALL" \
+		SUMMARY_BIN="$$INSTALL_DIR/safrochaind" \
 		SUMMARY_RUN="safrochaind"
 
 build: go-cache
@@ -140,9 +143,9 @@ build: go-cache
 	fi
 	@printf '$(C_GREEN)✅ Built safrochaind successfully$(C_RESET)\n'
 	@if [ "$(OS)" = "Windows_NT" ]; then \
-		$(MAKE) --no-print-directory print-summary SUMMARY_KIND="Build  " SUMMARY_BIN="./bin/safrochaind.exe" SUMMARY_RUN="./bin/safrochaind.exe"; \
+		$(MAKE) --no-print-directory print-summary SUMMARY_KIND="BUILD" SUMMARY_BIN="./bin/safrochaind.exe" SUMMARY_RUN="./bin/safrochaind.exe"; \
 	else \
-		$(MAKE) --no-print-directory print-summary SUMMARY_KIND="Build  " SUMMARY_BIN="./bin/safrochaind" SUMMARY_RUN="./bin/safrochaind"; \
+		$(MAKE) --no-print-directory print-summary SUMMARY_KIND="BUILD" SUMMARY_BIN="./bin/safrochaind" SUMMARY_RUN="./bin/safrochaind"; \
 	fi
 
 test-node:
