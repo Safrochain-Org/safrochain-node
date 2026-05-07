@@ -1,12 +1,13 @@
 package keeper_test
 
 import (
-	"embed"
 	"testing"
 
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
 	"github.com/stretchr/testify/suite"
+
+	_ "embed"
 
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
@@ -16,8 +17,7 @@ import (
 	"github.com/Safrochain_Org/safrochain/x/cw-hooks/types"
 )
 
-var _ = embed.FS{}
-
+//go:embed testdata/juno_staking_hooks_example.wasm
 var wasmContract []byte
 
 type KeeperTestSuite struct {
