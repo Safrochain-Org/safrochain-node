@@ -14,3 +14,12 @@ paths-ignore:
   - "**/*_test.go"
   - "**/testutil/**"
   - "**/mocks/**"
+
+# CodeQL's paths-ignore only filters source files; for compiled languages like
+# Go, alerts that originate from imports in already-compiled generated code
+# (api/**/*.pulsar.go) still surface unless the rule is filtered explicitly.
+# The crypto-com/cosmos-sdk-codeql/sensitive-import query is a known false
+# positive on cosmos-sdk pulsar/protobuf bindings, so drop it globally.
+query-filters:
+  - exclude:
+      id: crypto-com/cosmos-sdk-codeql/sensitive-import
