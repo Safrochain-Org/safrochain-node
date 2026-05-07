@@ -2,8 +2,10 @@ package keepers
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"path"
+	"slices"
 
 	"github.com/CosmWasm/wasmd/x/wasm"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
@@ -714,7 +716,9 @@ func (appKeepers *AppKeepers) GetSubspace(moduleName string) paramstypes.Subspac
 // BlockedAddresses returns all the app's blocked account addresses.
 func BlockedAddresses() map[string]bool {
 	modAccAddrs := make(map[string]bool)
-	for acc := range GetMaccPerms() {
+	// Iterate maccPerms in sorted key order so the blocked-address set is
+	// constructed deterministically.
+	for _, acc := range slices.Sorted(maps.Keys(GetMaccPerms())) {
 		modAccAddrs[authtypes.NewModuleAddress(acc).String()] = true
 	}
 

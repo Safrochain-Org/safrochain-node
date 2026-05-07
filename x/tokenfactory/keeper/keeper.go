@@ -3,6 +3,8 @@ package keeper
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	storetypes "cosmossdk.io/core/store"
 	"cosmossdk.io/log"
@@ -50,7 +52,10 @@ func NewKeeper(
 ) Keeper {
 	permAddrs := make(map[string]authtypes.PermissionsForAddress)
 	permAddrMap := make(map[string]bool)
-	for name, perms := range maccPerms {
+	// Iterate maccPerms in sorted key order so the permission lookup tables
+	// are populated deterministically.
+	for _, name := range slices.Sorted(maps.Keys(maccPerms)) {
+		perms := maccPerms[name]
 		permsForAddr := authtypes.NewPermissionsForAddress(name, perms)
 		permAddrs[name] = permsForAddr
 		permAddrMap[permsForAddr.GetAddress().String()] = true

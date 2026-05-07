@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -391,7 +393,10 @@ func GetDefaultBypassFeeMessages() []string {
 // AutoCLIOpts returns options based upon the modules used on Safrochain.
 func (app *App) AutoCLIOpts(initClientCtx client.Context) autocli.AppOptions {
 	modules := make(map[string]appmodule.AppModule)
-	for _, m := range app.ModuleManager.Modules {
+	// Iterate the module manager map in sorted key order so the resulting
+	// AutoCLI registration is deterministic across runs.
+	for _, name := range slices.Sorted(maps.Keys(app.ModuleManager.Modules)) {
+		m := app.ModuleManager.Modules[name]
 		if moduleWithName, ok := m.(module.HasName); ok {
 			moduleName := moduleWithName.Name()
 			if appModule, ok := moduleWithName.(appmodule.AppModule); ok {
@@ -471,7 +476,9 @@ func (app *App) LoadHeight(height int64) error {
 // ModuleAccountAddrs returns all the app's module account addresses.
 func (*App) ModuleAccountAddrs() map[string]bool {
 	modAccAddrs := make(map[string]bool)
-	for acc := range keepers.GetMaccPerms() {
+	// Walk the module-account-permissions map in sorted order so the set
+	// of module addresses is built deterministically.
+	for _, acc := range slices.Sorted(maps.Keys(keepers.GetMaccPerms())) {
 		modAccAddrs[authtypes.NewModuleAddress(acc).String()] = true
 	}
 
