@@ -65,51 +65,93 @@ BUILD_FLAGS := -tags "$(build_tags)" -ldflags '$(ldflags)'
 ###                                  Build                                  ###
 ###############################################################################
 
+# ANSI styling helpers (degrade gracefully when stdout is not a TTY).
+C_RESET   := \033[0m
+C_BOLD    := \033[1m
+C_DIM     := \033[2m
+C_CYAN    := \033[38;5;51m
+C_BLUE    := \033[38;5;75m
+C_GREEN   := \033[38;5;82m
+C_YELLOW  := \033[38;5;221m
+C_MAGENTA := \033[38;5;213m
+C_GREY    := \033[38;5;245m
+
+# Multi-line SAFROCHAIN ASCII banner. Exported so recipes can `printf "$$BANNER"`.
+define BANNER
+
+ #####    #####   #######  ######    #####    ######  ##   ##   #####   #####  ##   ##
+##       ##   ##  ##       ##   ##  ##   ##  ##       ##   ##  ##   ##   ###   ###  ##
+ #####   #######  ######   ######   ##   ##  ##       #######  #######   ###   ## # ##
+     ##  ##   ##  ##       ##  ##   ##   ##  ##       ##   ##  ##   ##   ###   ##  ###
+ #####   ##   ##  ##       ##   ##   #####    ######  ##   ##  ##   ##  #####  ##   ##
+
+endef
+export BANNER
+
+# Pretty-print the build/install summary. Inputs: $(SUMMARY_KIND), $(SUMMARY_BIN), $(SUMMARY_RUN).
+print-summary:
+	@printf '\n$(C_CYAN)%s$(C_RESET)' "$$BANNER"
+	@printf '$(C_DIM)        Sovereign blockchain · powered by the Cosmos SDK$(C_RESET)\n\n'
+	@printf '$(C_BOLD)┌──────────────────────────────────────────────────────────────────$(C_RESET)\n'
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_MAGENTA)$(C_BOLD)✨  %s COMPLETE$(C_RESET)\n' "$(SUMMARY_KIND)"
+	@printf '$(C_BOLD)├──────────────────────────────────────────────────────────────────$(C_RESET)\n'
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  safrochaind   $(C_YELLOW)%s$(C_RESET)\n' "$(VERSION)"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Cosmos SDK    $(C_YELLOW)%s$(C_RESET)\n' "$(COSMOS_SDK_VERSION)"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  CometBFT      $(C_YELLOW)%s$(C_RESET)\n' "$(CMT_VERSION)"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Go runtime    $(C_YELLOW)%s$(C_RESET)\n' "$$(go version 2>/dev/null | awk '{print $$3, $$4}')"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Build tags    $(C_GREY)%s$(C_RESET)\n' "$(build_tags_comma_sep)"
+	@printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Commit        $(C_GREY)%s$(C_RESET)\n' "$$(echo $(COMMIT) | cut -c1-12)"
+	@if [ -n "$(SUMMARY_BIN)" ] && [ -e "$(SUMMARY_BIN)" ]; then \
+		size=$$(du -h "$(SUMMARY_BIN)" 2>/dev/null | awk '{print $$1}'); \
+		printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Binary        $(C_BLUE)%s$(C_RESET) $(C_DIM)(%s)$(C_RESET)\n' "$(SUMMARY_BIN)" "$$size"; \
+	elif [ -n "$(SUMMARY_BIN)" ]; then \
+		printf '$(C_BOLD)│$(C_RESET)   $(C_GREEN)●$(C_RESET)  Binary        $(C_BLUE)%s$(C_RESET)\n' "$(SUMMARY_BIN)"; \
+	fi
+	@printf '$(C_BOLD)└──────────────────────────────────────────────────────────────────$(C_RESET)\n\n'
+	@printf '  $(C_DIM)→ Docs:     $(C_RESET) $(C_BLUE)https://docs.safrochain.com$(C_RESET)\n\n'
+
 verify:
-	@echo "🔎 - Verifying Dependencies ..."
+	@printf '$(C_CYAN)🔎 Verifying dependencies ...$(C_RESET)\n'
 	@go mod verify > /dev/null 2>&1
 	@go mod tidy
-	@echo "✅ - Verified dependencies successfully!"
-	@echo ""
+	@printf '$(C_GREEN)✅ Verified dependencies successfully$(C_RESET)\n\n'
 
 go-cache: verify
-	@echo "📥 - Downloading and caching dependencies..."
+	@printf '$(C_CYAN)📥 Downloading and caching dependencies ...$(C_RESET)\n'
 	@go mod download
-	@echo "✅ - Downloaded and cached dependencies successfully!"
-	@echo ""
+	@printf '$(C_GREEN)✅ Downloaded and cached dependencies successfully$(C_RESET)\n\n'
 
 install: go-cache
-	@echo "🔄 - Installing safrochain..."
+	@printf '$(C_CYAN)🔄 Installing safrochaind ...$(C_RESET)\n'
 	@go install $(BUILD_FLAGS) -mod=readonly ./cmd/safrochaind
 	@mkdir -p ./go/bin
-	@cp $$(go env GOBIN 2>/dev/null || echo $$(go env GOPATH)/bin)/safrochaind ./go/bin/safrochaind || true
-	@echo "✅ - Installed safrochain successfully! Run it using 'safrochaind'!"
-	@echo ""
-	@echo "====== Install Summary ======"
-	@echo "safrochain: $(VERSION)"
-	@echo "Cosmos SDK: $(COSMOS_SDK_VERSION)"
-	@echo "Comet: $(CMT_VERSION)"
-	@echo "============================="
+	@INSTALL_DIR="$$(go env GOBIN)"; \
+	[ -z "$$INSTALL_DIR" ] && INSTALL_DIR="$$(go env GOPATH)/bin"; \
+	cp "$$INSTALL_DIR/safrochaind" ./go/bin/safrochaind || true; \
+	printf '$(C_GREEN)✅ Installed safrochaind successfully$(C_RESET)\n'; \
+	$(MAKE) --no-print-directory print-summary \
+		SUMMARY_KIND="INSTALL" \
+		SUMMARY_BIN="$$INSTALL_DIR/safrochaind" \
+		SUMMARY_RUN="safrochaind"
 
 build: go-cache
-	@echo "🔄 - Building safrochain..."
+	@printf '$(C_CYAN)🔄 Building safrochaind ...$(C_RESET)\n'
 	@if [ "$(OS)" = "Windows_NT" ]; then \
 		GOOS=windows GOARCH=amd64 go build -mod=readonly $(BUILD_FLAGS) -o bin/safrochaind.exe ./cmd/safrochaind; \
 	else \
 		go build -mod=readonly $(BUILD_FLAGS) -o bin/safrochaind ./cmd/safrochaind; \
 	fi
-	@echo "✅ - Built safrochain successfully! Run it using './bin/safrochaind'!"
-	@echo ""
-	@echo "====== Install Summary ======"
-	@echo "safrochain: $(VERSION)"
-	@echo "Cosmos SDK: $(COSMOS_SDK_VERSION)"
-	@echo "Comet: $(CMT_VERSION)"
-	@echo "============================="
+	@printf '$(C_GREEN)✅ Built safrochaind successfully$(C_RESET)\n'
+	@if [ "$(OS)" = "Windows_NT" ]; then \
+		$(MAKE) --no-print-directory print-summary SUMMARY_KIND="BUILD" SUMMARY_BIN="./bin/safrochaind.exe" SUMMARY_RUN="./bin/safrochaind.exe"; \
+	else \
+		$(MAKE) --no-print-directory print-summary SUMMARY_KIND="BUILD" SUMMARY_BIN="./bin/safrochaind" SUMMARY_RUN="./bin/safrochaind"; \
+	fi
 
 test-node:
 	CHAIN_ID="local-1" HOME_DIR="~/.safrochain" TIMEOUT_COMMIT="500ms" CLEAN=true sh scripts/test_node.sh
 
-.PHONY: verify go-cache install build test-node
+.PHONY: verify go-cache install build test-node print-summary
 
 ###############################################################################
 ###                                 Tooling                                 ###

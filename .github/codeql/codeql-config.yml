@@ -1,4 +1,16 @@
+name: "Safrochain Node CodeQL config"
+
 paths:
   - "."
+
+# Skip generated, vendored and test code so CodeQL focuses on first-party
+# code that we actually maintain. The patterns below match the conventions
+# used by the cosmos-sdk upstream config.
 paths-ignore:
   - "api/**"
+  - "**/*.pb.go"
+  - "**/*.pb.gw.go"
+  - "**/*.pulsar.go"
+  - "**/*_test.go"
+  - "**/testutil/**"
+  - "**/mocks/**"

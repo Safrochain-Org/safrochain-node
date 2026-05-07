@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -165,7 +167,10 @@ Example:
 			}
 
 			// convert balances to underlying coins and sum up balances to total balance
-			for addr, account := range snapshotAccs {
+			// Iterate accounts in sorted address order so the snapshot is built
+			// deterministically.
+			for _, addr := range slices.Sorted(maps.Keys(snapshotAccs)) {
+				account := snapshotAccs[addr]
 				// account.LiquidBalances = underlyingCoins(account.LiquidBalances)
 				// account.Bonded = underlyingCoins(account.Bonded)
 				account.TotalBalances = sdk.NewCoins().
@@ -252,8 +257,11 @@ Example:
 				return err
 			}
 
-			// iterate through all accounts, leave out accounts that do not meet the user provided min stake amount
-			for _, r := range deriveSnapshot.Accounts {
+			// iterate through all accounts in sorted address order so the
+			// generated CSV is deterministic; leave out accounts that do
+			// not meet the user-provided min stake amount.
+			for _, addr := range slices.Sorted(maps.Keys(deriveSnapshot.Accounts)) {
+				r := deriveSnapshot.Accounts[addr]
 				var csvRow []string
 				if r.Staked.GT(sdkmath.NewInt(minStakeAmount)) {
 					csvRow = append(csvRow, r.Address, r.Staked.String())
