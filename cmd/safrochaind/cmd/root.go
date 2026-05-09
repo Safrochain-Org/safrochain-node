@@ -226,7 +226,7 @@ func initAppConfig() (string, any) {
 	// server config.
 	srvCfg := serverconfig.DefaultConfig()
 	srvCfg.MinGasPrices = strings.Join(
-		[]string{"0.075" + sdk.DefaultBondDenom}, ",")
+		[]string{"100000" + sdk.DefaultBondDenom}, ",")
 
 	customAppConfig := CustomAppConfig{
 		Config: *srvCfg,
