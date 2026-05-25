@@ -34,7 +34,7 @@ Safrochain is a community-first blockchain built using the Cosmos SDK. This repo
 - GCC (for protobuf & Wasm)
 
 ```bash
-git clone https://github.com/danbaruka/safrochain-node.git
+git clone https://github.com/Safrochain-Org/safrochain-node.git
 cd safrochain-node
 make install
 ```
