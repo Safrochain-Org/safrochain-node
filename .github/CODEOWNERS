@@ -1,3 +1,26 @@
 # CODEOWNERS: https://help.github.com/articles/about-codeowners/
+#
+# Each line specifies a file pattern followed by one or more owners.
+# Order matters: the last matching pattern takes precedence.
 
-* @JakeHartnell @dimiandre @niilptr @vexxvakan
+# Default owners for everything
+*                       @danbaruka @elielnfinic
+
+# Custom modules
+/x/clock/               @danbaruka @elielnfinic
+/x/cw-hooks/            @danbaruka @elielnfinic
+/x/drip/                @danbaruka @elielnfinic
+/x/feepay/              @danbaruka @elielnfinic
+/x/feeshare/            @danbaruka @elielnfinic
+/x/globalfee/           @danbaruka @elielnfinic
+/x/tokenfactory/        @danbaruka @elielnfinic
+/x/wrappers/            @danbaruka @elielnfinic
+
+# App wiring and consensus
+/app/                   @danbaruka @elielnfinic
+
+# Build / CI / release
+/.github/               @danbaruka @elielnfinic
+
+# Smart-contract / wasm code
+/wasmbindings/          @danbaruka @elielnfinic
