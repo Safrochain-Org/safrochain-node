@@ -1,3 +1,30 @@
 # CODEOWNERS: https://help.github.com/articles/about-codeowners/
+#
+# Each line is a file pattern followed by one or more owners.
+# Order matters: the last matching pattern has the most precedence.
 
-* @JakeHartnell @dimiandre @niilptr @vexxvakan
+# Default: @danbaruka is the sole org member as of this writing
+*                       @danbaruka
+
+# Custom modules - maintained by core
+/x/clock/               @danbaruka
+/x/cw-hooks/            @danbaruka
+/x/drip/                @danbaruka
+/x/feepay/              @danbaruka
+/x/feeshare/            @danbaruka
+/x/globalfee/           @danbaruka
+/x/tokenfactory/        @danbaruka
+/x/wrappers/            @danbaruka
+
+# App wiring and consensus
+/app/                   @danbaruka
+
+# Build, CI/CD, and tooling
+/.github/               @danbaruka
+/scripts/               @danbaruka
+/Makefile               @danbaruka
+/Makefile.inc           @danbaruka
+
+# Documentation
+/README.md              @danbaruka
+/docs/                  @danbaruka
