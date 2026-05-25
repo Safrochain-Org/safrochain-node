@@ -9,3 +9,5 @@
   build-env:
     - LEDGER_ENABLED=false
     - BUILD_TAGS=muslc
+
+    
