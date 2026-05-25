@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discord
+    url: https://discord.gg/7ftShzFV
+    about: Ask questions and get support from the community on Discord.
+  - name: Security Vulnerability
+    url: https://github.com/Safrochain-Org/safrochain-node/blob/main/SECURITY.md
+    about: Please read our security policy before reporting a vulnerability privately.

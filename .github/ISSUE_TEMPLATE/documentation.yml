@@ -1,0 +1,41 @@
+name: Documentation
+description: Report missing, incorrect, or unclear documentation
+labels: ["type:docs"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Good documentation helps everyone. Thanks for helping us improve it!
+
+  - type: input
+    id: page
+    attributes:
+      label: Page / Section Affected
+      description: Link to the page or name the doc section that needs attention.
+      placeholder: "e.g. README.md > Installation, or https://github.com/Safrochain-Org/safrochain-node/blob/main/docs/..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is Missing or Incorrect
+      description: Describe clearly what is wrong, outdated, or absent in the current documentation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Change
+      description: What should the documentation say instead? You can paste a proposed rewrite here.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context or references that would help resolve this.
+    validations:
+      required: false
