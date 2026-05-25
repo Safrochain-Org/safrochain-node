@@ -121,6 +121,7 @@ go-cache: verify
 	@go mod download
 	@printf '$(C_GREEN)✅ Downloaded and cached dependencies successfully$(C_RESET)\n\n'
 
+## Install the binary
 install: go-cache
 	@printf '$(C_CYAN)🔄 Installing safrochaind ...$(C_RESET)\n'
 	@go install $(BUILD_FLAGS) -mod=readonly ./cmd/safrochaind
@@ -134,6 +135,7 @@ install: go-cache
 		SUMMARY_BIN="$$INSTALL_DIR/safrochaind" \
 		SUMMARY_RUN="safrochaind"
 
+## Build the project binary
 build: go-cache
 	@printf '$(C_CYAN)🔄 Building safrochaind ...$(C_RESET)\n'
 	@if [ "$(OS)" = "Windows_NT" ]; then \
@@ -175,6 +177,7 @@ install-lint:
 	@echo "✅ - Installed golangci-lint successfully!"
 	@echo ""
 
+## Run linters
 lint:
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		INSTALLED=$$(golangci-lint version | head -n1 | awk '{print $$4}'); \
@@ -191,6 +194,7 @@ lint:
 	@golangci-lint run
 	@echo "✅ - Linted code successfully!"
 
+## Format source code
 format:
 	@if command -v gofumpt >/dev/null 2>&1; then \
 		INSTALLED=$$(go version -m $$(command -v gofumpt) | awk '$$1=="mod" {print $$3; exit}'); \
@@ -298,6 +302,7 @@ protoImage=$(DOCKER) run --rm -v $(CURDIR):/workspace -v /var/run/docker.sock:/v
 
 proto-all: proto-format proto-lint proto-gen proto-gen-2 proto-swagger-gen
 
+## Generate protobuf code
 proto-gen:
 	@echo "🛠️ - Generating Protobuf"
 	@$(protoImage) sh ./scripts/protoc/protocgen.sh
@@ -308,6 +313,7 @@ proto-gen-2:
 	@$(protoImage) sh ./scripts/protoc/protocgen2.sh
 	@echo "✅ - Generated Protobuf v2 successfully!"
 
+## Generate Swagger from protobuf
 proto-swagger-gen:
 	@echo "📖 - Generating Protobuf Swagger"
 	@$(protoImage) sh ./scripts/protoc/protoc-swagger-gen.sh
@@ -318,6 +324,7 @@ proto-format:
 	@$(protoImage) find ./ -name "*.proto" -exec clang-format -i {} \;
 	@echo "✅ - Formatted Protobuf successfully!"
 
+## Lint protobuf files
 proto-lint:
 	@echo "🔎 - Linting Protobuf"
 	@$(protoImage) buf lint --error-format=json
@@ -329,3 +336,7 @@ proto-check-breaking:
 	@echo "✅ - Checked Protobuf changes successfully!"
 
 .PHONY: proto-all proto-gen proto-gen-2 proto-swagger-gen proto-format proto-lint proto-check-breaking
+
+## help: Show this help message
+help:
+	@grep -E '^[a-zA-Z_-]+:.*##' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-30s\033[0m %s\n", $$1, $$2}'
