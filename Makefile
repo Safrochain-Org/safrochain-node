@@ -109,17 +109,20 @@ print-summary:
 	fi
 	@printf '$(C_BOLD)└──────────────────────────────────────────────────────────────────$(C_RESET)\n\n'
 	@printf '  $(C_DIM)→ Docs:     $(C_RESET) $(C_BLUE)https://docs.safrochain.com$(C_RESET)\n\n'
+## verify: Verify Go module dependencies (go mod verify + tidy)
 
 verify:
 	@printf '$(C_CYAN)🔎 Verifying dependencies ...$(C_RESET)\n'
 	@go mod verify > /dev/null 2>&1
 	@go mod tidy
 	@printf '$(C_GREEN)✅ Verified dependencies successfully$(C_RESET)\n\n'
+## go-cache: Download and cache Go module dependencies
 
 go-cache: verify
 	@printf '$(C_CYAN)📥 Downloading and caching dependencies ...$(C_RESET)\n'
 	@go mod download
 	@printf '$(C_GREEN)✅ Downloaded and cached dependencies successfully$(C_RESET)\n\n'
+## install: Build and install safrochaind binary to GOBIN
 
 install: go-cache
 	@printf '$(C_CYAN)🔄 Installing safrochaind ...$(C_RESET)\n'
@@ -133,6 +136,7 @@ install: go-cache
 		SUMMARY_KIND="INSTALL" \
 		SUMMARY_BIN="$$INSTALL_DIR/safrochaind" \
 		SUMMARY_RUN="safrochaind"
+## build: Build safrochaind binary locally (./bin/safrochaind)
 
 build: go-cache
 	@printf '$(C_CYAN)🔄 Building safrochaind ...$(C_RESET)\n'
@@ -147,11 +151,20 @@ build: go-cache
 	else \
 		$(MAKE) --no-print-directory print-summary SUMMARY_KIND="BUILD" SUMMARY_BIN="./bin/safrochaind" SUMMARY_RUN="./bin/safrochaind"; \
 	fi
+## test-node: Start a local testnet node for development
 
 test-node:
 	CHAIN_ID="local-1" HOME_DIR="~/.safrochain" TIMEOUT_COMMIT="500ms" CLEAN=true sh scripts/test_node.sh
 
-.PHONY: verify go-cache install build test-node print-summary
+.PHONY: help verify go-cache install build test-node print-summary
+
+.DEFAULT_GOAL := help
+
+## help: Show this help message with all documented targets
+help:
+	@printf '$(C_CYAN)Available targets:$(C_RESET)\n\n'
+	@awk 'BEGIN {FS = ":.*##"; printf "  %-30s %s\n", "TARGET", "DESCRIPTION"; printf "  %-30s %s\n", "------", "-----------"} /^[a-zA-Z_-]+:.*##/ {printf "  '$(C_GREEN)%-30s'$(C_RESET) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ""
 
 ###############################################################################
 ###                                 Tooling                                 ###
@@ -162,18 +175,21 @@ gofumpt_version=v0.8.0
 
 golangci_lint=github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 golangci_lint_version=v2.1.6
+## install-format: Install gofumpt code formatter
 
 install-format:
 	@echo "🔄 - Installing gofumpt $(gofumpt_version)..."
 	@go install $(gofumpt)@$(gofumpt_version)
 	@echo "✅ - Installed gofumpt successfully!"
 	@echo ""
+## install-lint: Install golangci-lint linter
 
 install-lint:
 	@echo "🔄 - Installing golangci-lint $(golangci_lint_version)..."
 	@go install $(golangci_lint)@$(golangci_lint_version)
 	@echo "✅ - Installed golangci-lint successfully!"
 	@echo ""
+## lint: Run golangci-lint on the entire codebase
 
 lint:
 	@if command -v golangci-lint >/dev/null 2>&1; then \
@@ -190,6 +206,7 @@ lint:
 	@echo "🔄 - Linting code..."
 	@golangci-lint run
 	@echo "✅ - Linted code successfully!"
+## format: Format all Go source files with gofumpt
 
 format:
 	@if command -v gofumpt >/dev/null 2>&1; then \
@@ -212,6 +229,7 @@ format:
 ###############################################################################
 ###                             e2e interchain test                         ###
 ###############################################################################
+## ictest-basic: Run basic e2e interchain test
 
 ictest-basic: rm-testcache
 	cd interchaintest && go test -race -v -run TestBasicsafrochainStart .
@@ -221,6 +239,7 @@ ictest-statesync: rm-testcache
 
 ictest-ibchooks: rm-testcache
 	cd interchaintest && go test -race -v -run TestsafrochainIBCHooks .
+## ictest-tokenfactory: Run tokenfactory e2e interchain test
 
 ictest-tokenfactory: rm-testcache
 	cd interchaintest && go test -race -v -run TestsafrochainTokenFactory .
@@ -233,9 +252,11 @@ ictest-pfm: rm-testcache
 
 ictest-globalfee: rm-testcache
 	cd interchaintest && go test -race -v -run TestsafrochainGlobalFee .
+## ictest-upgrade: Run chain upgrade e2e interchain test
 
 ictest-upgrade: rm-testcache
 	cd interchaintest && go test -race -v -run TestBasicsafrochainUpgrade .
+## ictest-ibc: Run IBC transfer e2e interchain test
 
 ictest-ibc: rm-testcache
 	cd interchaintest && go test -race -v -run TestsafrochainGaiaIBCTransfer .
@@ -260,6 +281,7 @@ ictest-clock: rm-testcache
 
 ictest-gov-fix: rm-testcache
 	cd interchaintest && go test -race -v -run TestFixRemovedMsgTypeQueryPanic .
+## rm-testcache: Clean Go test cache
 
 rm-testcache:
 	go clean -testcache
@@ -272,6 +294,7 @@ rm-testcache:
 
 heighliner=github.com/strangelove-ventures/heighliner
 heighliner_version=v1.7.2
+## install-heighliner: Install heighliner Docker image builder
 
 install-heighliner:
 	@if ! command -v heighliner > /dev/null; then \
@@ -280,6 +303,7 @@ install-heighliner:
 		echo "✅ - Installed heighliner successfully!"; \
 		echo ""; \
    fi
+## local-image: Build local Docker image with heighliner
 
 local-image: install-heighliner
 	@echo "🔄 - Building Docker Image..."
@@ -295,8 +319,10 @@ local-image: install-heighliner
 protoVer=0.17.0
 protoImageName=ghcr.io/cosmos/proto-builder:$(protoVer)
 protoImage=$(DOCKER) run --rm -v $(CURDIR):/workspace -v /var/run/docker.sock:/var/run/docker.sock --workdir /workspace $(protoImageName)
+## proto-all: Run all protobuf steps (format, lint, gen, swagger)
 
 proto-all: proto-format proto-lint proto-gen proto-gen-2 proto-swagger-gen
+## proto-gen: Generate Go code from protobuf definitions
 
 proto-gen:
 	@echo "🛠️ - Generating Protobuf"
@@ -307,16 +333,19 @@ proto-gen-2:
 	@echo "🛠️ - Generating Protobuf v2"
 	@$(protoImage) sh ./scripts/protoc/protocgen2.sh
 	@echo "✅ - Generated Protobuf v2 successfully!"
+## proto-swagger-gen: Generate Swagger docs from protos
 
 proto-swagger-gen:
 	@echo "📖 - Generating Protobuf Swagger"
 	@$(protoImage) sh ./scripts/protoc/protoc-swagger-gen.sh
 	@echo "✅ - Generated Protobuf Swagger successfully!"
+## proto-format: Format .proto files with clang-format
 
 proto-format:
 	@echo "🖊️ - Formatting Protobuf Swagger"
 	@$(protoImage) find ./ -name "*.proto" -exec clang-format -i {} \;
 	@echo "✅ - Formatted Protobuf successfully!"
+## proto-lint: Lint protobuf definitions with buf
 
 proto-lint:
 	@echo "🔎 - Linting Protobuf"
