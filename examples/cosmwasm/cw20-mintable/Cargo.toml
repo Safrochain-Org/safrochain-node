@@ -1,0 +1,26 @@
+[package]
+name = "cw20-mintable"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+library = []
+
+[dependencies]
+cosmwasm-std = "2.1"
+cosmwasm-schema = "2.1"
+cw-storage-plus = "2.0"
+cw2 = "2.0"
+cw20 = "2.0"
+cw20-base = { version = "2.0", features = ["library"] }
+serde = { version = "1", features = ["derive"] }
+schemars = "0.8"
+thiserror = "2"
+
+[dev-dependencies]
+cw-multi-test = "2.0"
+cosmwasm-test = { version = "2.1", features = ["RUST_BACKTRACE"] }
