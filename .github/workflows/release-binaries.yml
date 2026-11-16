@@ -2,11 +2,21 @@
 name: release binaries
 
 # Builds the statically linked release binaries with the repository
-# Dockerfile (Go toolchain and libwasmvm pinned there) and uploads them with
-# their SHA-256 checksums as workflow artifacts. It publishes nothing: no
-# GitHub release, no image push, no tag push. The version tag is created only
-# inside the runner so that `git describe --tags` stamps the binary.
+# Dockerfile (Go toolchain and libwasmvm pinned there), checks them and
+# records their SHA-256 checksums.
+#
+# - Pushing a version tag (vX.Y.Z or vX.Y.Z-rc.N) builds the binaries from
+#   that tag and publishes them, with SHA256SUMS, on the GitHub release of the
+#   tag (the release is created if it does not exist yet; release candidates
+#   are marked as pre-releases).
+# - workflow_dispatch builds any ref and only uploads workflow artifacts: it
+#   publishes nothing. The version tag is then created inside the runner only,
+#   so that `git describe --tags` stamps the binary.
 on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
   workflow_dispatch:
     inputs:
       version:
@@ -20,32 +30,38 @@ on:
 permissions:
   contents: read
 
+env:
+  VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+  REF: ${{ github.event_name == 'push' && github.sha || inputs.ref }}
+
 jobs:
   build:
     name: ${{ matrix.platform }}
-    runs-on: ubuntu-latest
+    # arm64 builds natively where GitHub provides arm64 runners (public
+    # repositories); elsewhere they fall back to QEMU on an x86_64 runner.
+    runs-on: ${{ matrix.platform == 'linux/arm64' && !github.event.repository.private && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - platform: linux/amd64
             suffix: linux-amd64
           - platform: linux/arm64
             suffix: linux-arm64
-    env:
-      ASSET: safrochaind-${{ inputs.version }}-${{ matrix.suffix }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ env.REF }}
           fetch-depth: 0
 
-      - name: Stamp version (local tag only)
+      - name: Stamp version
         run: |
-          git tag -f "${{ inputs.version }}"
-          git describe --tags
+          git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null || git tag "$VERSION"
+          test "$(git describe --tags --exact-match)" = "$VERSION"
+          echo "ASSET=safrochaind-$VERSION-${{ matrix.suffix }}" >> "$GITHUB_ENV"
 
       - uses: docker/setup-qemu-action@v3
+        if: matrix.platform == 'linux/arm64' && runner.arch != 'ARM64'
       - uses: docker/setup-buildx-action@v3
 
       - name: Build static binary
@@ -54,10 +70,18 @@ jobs:
           id=$(docker create --platform "${{ matrix.platform }}" safrochaind:release)
           docker cp "$id:/usr/bin/safrochaind" "$ASSET"
           docker rm "$id"
-          file "$ASSET"
+          file "$ASSET" | tee /dev/stderr | grep -q "statically linked"
 
-      - name: Version
-        run: docker run --rm --platform "${{ matrix.platform }}" safrochaind:release safrochaind version --long | tee "$ASSET.version.txt"
+      - name: Check version, commit and libwasmvm
+        run: |
+          run() { docker run --rm --platform "${{ matrix.platform }}" safrochaind:release safrochaind "$@"; }
+          run version --long | tee "$ASSET.version.txt"
+          grep -qx "version: $VERSION" "$ASSET.version.txt"
+          grep -qx "commit: $(git rev-parse HEAD)" "$ASSET.version.txt"
+          want=$(sed -n -E 's#^[[:space:]]*(require[[:space:]]+)?github.com/CosmWasm/wasmvm/v2[[:space:]]+v([^[:space:]]+).*#\2#p' go.mod | head -1)
+          got=$(run query wasm libwasmvm-version)
+          echo "libwasmvm: $got" | tee -a "$ASSET.version.txt"
+          test "$got" = "$want" || { echo "embedded libwasmvm $got does not match go.mod $want"; exit 1; }
 
       - name: Checksum
         run: sha256sum "$ASSET" | tee "$ASSET.sha256"
@@ -70,3 +94,36 @@ jobs:
             ${{ env.ASSET }}.sha256
             ${{ env.ASSET }}.version.txt
           if-no-files-found: error
+
+  publish:
+    name: publish release assets
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: SHA256SUMS
+        working-directory: dist
+        run: |
+          cat safrochaind-*.sha256 > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload to the GitHub release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$VERSION" >/dev/null 2>&1; then
+            flags=(--verify-tag --title "Safrochain $VERSION" --notes "Release binaries for $VERSION. Verify them against SHA256SUMS.")
+            if [[ "$VERSION" == *-rc.* ]]; then flags+=(--prerelease); fi
+            gh release create "$VERSION" "${flags[@]}"
+          fi
+          gh release upload "$VERSION" "safrochaind-$VERSION-linux-amd64" "safrochaind-$VERSION-linux-arm64" SHA256SUMS --clobber
