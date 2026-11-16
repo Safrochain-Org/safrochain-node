@@ -22,6 +22,12 @@ import (
 	"github.com/Safrochain_Org/safrochain/x/tokenfactory/types"
 )
 
+// StakingKeeper is the minimal x/staking interface needed by the keeper to
+// resolve the chain's native (bond) denom.
+type StakingKeeper interface {
+	BondDenom(ctx context.Context) (string, error)
+}
+
 type Keeper struct {
 	cdc          codec.BinaryCodec
 	storeService storetypes.KVStoreService
@@ -31,6 +37,7 @@ type Keeper struct {
 	accountKeeper      authkeeper.AccountKeeper
 	bankKeeper         bankkeeper.Keeper
 	distributionKeeper distrkeeper.Keeper
+	stakingKeeper      StakingKeeper
 
 	enabledCapabilities []string
 
@@ -47,6 +54,7 @@ func NewKeeper(
 	accountKeeper authkeeper.AccountKeeper,
 	bankKeeper bankkeeper.Keeper,
 	distributionKeeper distrkeeper.Keeper,
+	stakingKeeper StakingKeeper,
 	enabledCapabilities []string,
 	authority string,
 ) Keeper {
@@ -70,6 +78,7 @@ func NewKeeper(
 		accountKeeper:      accountKeeper,
 		bankKeeper:         bankKeeper,
 		distributionKeeper: distributionKeeper,
+		stakingKeeper:      stakingKeeper,
 
 		enabledCapabilities: enabledCapabilities,
 

@@ -3,10 +3,10 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
-	icacontrollertypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/types"
 	icagenesistypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/genesis/types"
 	icahosttypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/types"
 	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
@@ -16,7 +16,22 @@ import (
 	"github.com/cosmos/cosmos-sdk/server"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
 	genutiltypes "github.com/cosmos/cosmos-sdk/x/genutil/types"
+
+	"github.com/Safrochain_Org/safrochain/app/keepers"
 )
+
+// defaultIcaGenesisState returns the ICA genesis state written by add-ica-config.
+// The controller keeps the ibc-go defaults. The host only allows the
+// least-privilege message list in keepers.ICAHostAllowMessages (no "*" wildcard).
+func defaultIcaGenesisState() *icagenesistypes.GenesisState {
+	hostGenesisState := icagenesistypes.DefaultHostGenesis()
+	hostGenesisState.Params = icahosttypes.Params{
+		HostEnabled:   true,
+		AllowMessages: slices.Clone(keepers.ICAHostAllowMessages),
+	}
+
+	return icagenesistypes.NewGenesisState(icagenesistypes.DefaultControllerGenesis(), hostGenesisState)
+}
 
 // AddGenesisIcaCmd returns add-genesis-account cobra Command.
 func AddGenesisIcaCmd(defaultNodeHome string) *cobra.Command {
@@ -38,18 +53,7 @@ func AddGenesisIcaCmd(defaultNodeHome string) *cobra.Command {
 				return fmt.Errorf("failed to unmarshal genesis state: %w", err)
 			}
 
-			controllerGenesisState := icagenesistypes.DefaultControllerGenesis()
-			// no params set in upgrade handler, no params set here
-			controllerGenesisState.Params = icacontrollertypes.Params{}
-
-			hostGenesisState := icagenesistypes.DefaultHostGenesis()
-			// add the messages we want (from old upgrade handler)
-			hostGenesisState.Params = icahosttypes.Params{
-				HostEnabled:   true,
-				AllowMessages: []string{"*"},
-			}
-
-			newIcaGenState := icagenesistypes.NewGenesisState(controllerGenesisState, hostGenesisState)
+			newIcaGenState := defaultIcaGenesisState()
 
 			icaGenStateBz, err := clientCtx.Codec.MarshalJSON(newIcaGenState)
 			if err != nil {

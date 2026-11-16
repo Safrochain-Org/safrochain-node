@@ -1,0 +1,72 @@
+---
+name: release binaries
+
+# Builds the statically linked release binaries with the repository
+# Dockerfile (Go toolchain and libwasmvm pinned there) and uploads them with
+# their SHA-256 checksums as workflow artifacts. It publishes nothing: no
+# GitHub release, no image push, no tag push. The version tag is created only
+# inside the runner so that `git describe --tags` stamps the binary.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp, e.g. v0.3.0"
+        required: true
+      ref:
+        description: "Commit SHA (or branch) to build"
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            suffix: linux-amd64
+          - platform: linux/arm64
+            suffix: linux-arm64
+    env:
+      ASSET: safrochaind-${{ inputs.version }}-${{ matrix.suffix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Stamp version (local tag only)
+        run: |
+          git tag -f "${{ inputs.version }}"
+          git describe --tags
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build static binary
+        run: |
+          docker buildx build --platform "${{ matrix.platform }}" --load -t safrochaind:release .
+          id=$(docker create --platform "${{ matrix.platform }}" safrochaind:release)
+          docker cp "$id:/usr/bin/safrochaind" "$ASSET"
+          docker rm "$id"
+          file "$ASSET"
+
+      - name: Version
+        run: docker run --rm --platform "${{ matrix.platform }}" safrochaind:release safrochaind version --long | tee "$ASSET.version.txt"
+
+      - name: Checksum
+        run: sha256sum "$ASSET" | tee "$ASSET.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          path: |
+            ${{ env.ASSET }}
+            ${{ env.ASSET }}.sha256
+            ${{ env.ASSET }}.version.txt
+          if-no-files-found: error

@@ -3,7 +3,6 @@ package keepers
 import (
 	"fmt"
 	"maps"
-	"math"
 	"path"
 	"slices"
 
@@ -75,10 +74,8 @@ import (
 	govv1beta "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 	mintkeeper "github.com/cosmos/cosmos-sdk/x/mint/keeper"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
-	"github.com/cosmos/cosmos-sdk/x/params"
 	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	paramproposal "github.com/cosmos/cosmos-sdk/x/params/types/proposal"
 	slashingkeeper "github.com/cosmos/cosmos-sdk/x/slashing/keeper"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
@@ -187,7 +184,7 @@ type AppKeepers struct {
 	DripKeeper dripkeeper.Keeper
 
 	// Middleware wrapper
-	Ics20WasmHooks   *ibchooks.WasmHooks
+	Ics20WasmHooks   *SafeWasmHooks
 	HooksICS4Wrapper ibchooks.ICS4Middleware
 }
 
@@ -198,7 +195,6 @@ func NewAppKeepers(
 	maccPerms map[string][]string,
 	appOpts servertypes.AppOptions,
 	wasmOpts []wasmkeeper.Option,
-	bondDenom string,
 	homePath string,
 ) AppKeepers {
 	appKeepers := AppKeepers{}
@@ -354,12 +350,16 @@ func NewAppKeepers(
 
 	// register the proposal types
 	govRouter := govv1beta.NewRouter()
-	// This should be removed. It is still in place to avoid failures of modules that have not yet been upgraded
-	govRouter.AddRoute(govtypes.RouterKey, govv1beta.ProposalHandler).
-		AddRoute(paramproposal.RouterKey, params.NewParamChangeProposalHandler(appKeepers.ParamsKeeper))
-	// Update the max metadata length to be >255
+	// Only the legacy text-proposal route is kept. The legacy ParamChangeProposal
+	// route is removed: every module with a params subspace is updated through
+	// its own MsgUpdateParams, executed by the gov module authority.
+	govRouter.AddRoute(govtypes.RouterKey, govv1beta.ProposalHandler)
+	// Bound proposal metadata, title and summary. The SDK default (255) is too
+	// small for real proposals, but math.MaxUint64 is unsafe: the summary limit
+	// is derived as 40*MaxMetadataLen and wraps around on overflow. 10_000 bytes
+	// leaves room for descriptive metadata while keeping state growth bounded.
 	govConfig := govtypes.DefaultConfig()
-	govConfig.MaxMetadataLen = math.MaxUint64
+	govConfig.MaxMetadataLen = 10_000
 
 	govKeeper := wrappedgovkeeper.NewKeeper(
 		appCodec,
@@ -386,11 +386,11 @@ func NewAppKeepers(
 	)
 	appKeepers.IBCHooksKeeper = &hooksKeeper
 
-	wasmHooks := ibchooks.NewWasmHooks(
+	wasmHooks := NewSafeWasmHooks(ibchooks.NewWasmHooks(
 		appKeepers.IBCHooksKeeper,
 		&appKeepers.WasmKeeper,
 		bech32Prefix,
-	)
+	))
 	appKeepers.Ics20WasmHooks = &wasmHooks
 	// The contract keeper needs to be set later
 	appKeepers.HooksICS4Wrapper = ibchooks.NewICS4Middleware(
@@ -498,6 +498,7 @@ func NewAppKeepers(
 		appKeepers.AccountKeeper,
 		appKeepers.BankKeeper,
 		appKeepers.DistrKeeper,
+		stakingKeeper,
 		tokenFactoryCapabilities,
 		govModAddress,
 	)
@@ -556,7 +557,7 @@ func NewAppKeepers(
 		appKeepers.BankKeeper,
 		appKeepers.WasmKeeper,
 		appKeepers.AccountKeeper,
-		bondDenom,
+		stakingKeeper,
 		govModAddress,
 	)
 
@@ -584,6 +585,7 @@ func NewAppKeepers(
 		appCodec,
 		runtime.NewKVStoreService(appKeepers.keys[driptypes.StoreKey]),
 		appKeepers.BankKeeper,
+		stakingKeeper,
 		authtypes.FeeCollectorName,
 		govModAddress,
 	)
@@ -724,12 +726,15 @@ func BlockedAddresses() map[string]bool {
 
 	// allow the following addresses to receive funds
 	delete(modAccAddrs, authtypes.NewModuleAddress(govtypes.ModuleName).String())
-	delete(modAccAddrs, authtypes.NewModuleAddress(feepaytypes.ModuleName).String())
 
 	return modAccAddrs
 }
 
 // GetMaccPerms returns a copy of the module account permissions
 func GetMaccPerms() map[string][]string {
-	return maccPerms
+	dupMaccPerms := make(map[string][]string, len(maccPerms))
+	for k, v := range maccPerms {
+		dupMaccPerms[k] = slices.Clone(v)
+	}
+	return dupMaccPerms
 }

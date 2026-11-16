@@ -11,4 +11,5 @@ var (
 	ErrDuplicate             = errorsmod.Register(ModuleName, 4, "duplicate")
 	ErrBlank                 = errorsmod.Register(ModuleName, 5, "address cannot be blank")
 	ErrEmptyAllowedAddresses = errorsmod.Register(ModuleName, 6, "drip module cannot be enabled with an empty allowed_addresses list")
+	ErrDenomNotAllowed       = errorsmod.Register(ModuleName, 7, "only the native staking denom and tokenfactory denoms can be distributed")
 )

@@ -128,8 +128,13 @@ func (s *KeeperTestSuite) TestPerformance() {
 	s.Require().NoError(err)
 	s.Require().Len(contracts, numContracts)
 
-	// Call end blocker
-	s.EndBlock()
+	// The per-block gas budget bounds how many contracts run in one block;
+	// the remaining ones run in the following blocks. Every contract must be
+	// reached (and jailed) within a bounded number of blocks.
+	const maxBlocks = 10
+	for range maxBlocks {
+		s.EndBlock()
+	}
 
 	// Ensure contracts are jailed
 	contracts, err = clockKeeper.GetAllContracts(s.Ctx)

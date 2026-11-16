@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"fmt"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/Safrochain_Org/safrochain/x/cw-hooks/types"
@@ -19,22 +21,25 @@ func (k Keeper) InitGenesis(
 		panic(err)
 	}
 
-	for _, v := range data.StakingContractAddresses {
+	k.initGenesisContracts(ctx, "staking", types.KeyPrefixStaking, data.StakingContractAddresses)
+	k.initGenesisContracts(ctx, "governance", types.KeyPrefixGov, data.GovContractAddresses)
+}
+
+// initGenesisContracts registers the genesis contracts of one hook type. Every
+// address must be an existing contract: x/wasm is initialised before
+// x/cw-hooks.
+func (k Keeper) initGenesisContracts(ctx sdk.Context, hook string, keyPrefix []byte, addrs []string) {
+	for _, v := range addrs {
 		accAddr, err := sdk.AccAddressFromBech32(v)
 		if err != nil {
-			panic(err)
+			panic(fmt.Errorf("cw-hooks genesis: invalid %s contract address %q: %w", hook, v, err))
 		}
 
-		k.SetContract(ctx, types.KeyPrefixStaking, accAddr)
-	}
-
-	for _, v := range data.GovContractAddresses {
-		accAddr, err := sdk.AccAddressFromBech32(v)
-		if err != nil {
-			panic(err)
+		if !k.GetWasmKeeper().HasContractInfo(ctx, accAddr) {
+			panic(fmt.Errorf("cw-hooks genesis: %s contract %s does not exist", hook, accAddr))
 		}
 
-		k.SetContract(ctx, types.KeyPrefixGov, accAddr)
+		k.SetContract(ctx, keyPrefix, accAddr)
 	}
 }
 

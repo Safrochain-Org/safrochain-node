@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: 1.25.8
+  GO_VERSION: 1.26.11
 
 jobs:
   golangci:
@@ -32,3 +32,7 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.4.0
+          # Build the pinned linter with the job's Go toolchain: the prebuilt
+          # v2.4.0 binary is built with Go 1.25 and refuses to lint a Go 1.26
+          # module. Upgrading the linter itself (new rules) is a separate change.
+          install-mode: goinstall

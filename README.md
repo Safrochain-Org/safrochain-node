@@ -19,7 +19,7 @@ Safrochain is a community-first blockchain built using the Cosmos SDK. This repo
 ## 📦 Binary
 
 - **Binary name:** `safrochaind`
-- **Chain ID:** `safro-testnet-1` or `safro-mainnet-1`
+- **Chain ID:** `safrochain-1` (mainnet) or `safro-testnet-1` (testnet)
 - **Denom:** `usaf` (1 SAF = 10^6 micro `usaf`)
 - **Token metadata:** Available in `config/genesis.json`
 
@@ -29,7 +29,7 @@ Safrochain is a community-first blockchain built using the Cosmos SDK. This repo
 
 ### Prerequisites
 
-- Go >= 1.22.x
+- Go 1.26.11 (the toolchain pinned in `go.mod`; release binaries are built with it)
 - Git
 - GCC (for protobuf & Wasm)
 

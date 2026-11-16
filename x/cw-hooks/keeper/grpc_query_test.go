@@ -33,14 +33,14 @@ func (s *KeeperTestSuite) TestContracts() {
 
 		_, err := s.msgServer.RegisterStaking(s.Ctx, &types.MsgRegisterStaking{
 			ContractAddress: c.ContractAddress,
-			RegisterAddress: c.RegisterAddress,
+			RegisterAddress: s.authority(),
 		})
 		staking = append(staking, c)
 		s.Require().NoError(err)
 
 		_, err = s.msgServer.RegisterGovernance(s.Ctx, &types.MsgRegisterGovernance{
 			ContractAddress: c.ContractAddress,
-			RegisterAddress: c.RegisterAddress,
+			RegisterAddress: s.authority(),
 		})
 		governance = append(governance, c)
 		s.Require().NoError(err)

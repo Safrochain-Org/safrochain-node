@@ -37,7 +37,6 @@ type HandlerOptions struct {
 
 	// cosmos sdk
 	StakingKeeper stakingkeeper.Keeper
-	BondDenom     string
 	BankKeeper    bankkeeper.Keeper
 
 	// ibc
@@ -88,7 +87,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 	// Define FeePay and Global Fee decorators. These decorators are called in different orders based on the type of
 	// transaction. The FeePay decorator is called first for FeePay transactions, and the GlobalFee decorator is called
 	// first for all other transactions. See the FeeRouteDecorator for more details.
-	fpd := feepayante.NewDeductFeeDecorator(options.FeePayKeeper, options.GlobalFeeKeeper, options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.BondDenom)
+	fpd := feepayante.NewDeductFeeDecorator(options.FeePayKeeper, options.GlobalFeeKeeper, options.AccountKeeper, options.BankKeeper, options.FeegrantKeeper, options.StakingKeeper)
 	gfd := globalfeeante.NewFeeDecorator(options.BypassMinFeeMsgTypes, options.GlobalFeeKeeper, options.StakingKeeper, maxBypassMinFeeMsgGasUsage)
 
 	anteDecorators := []sdk.AnteDecorator{

@@ -11,6 +11,18 @@ type TokenFactoryQuery struct {
 	Params          *GetParams       `json:"params,omitempty"`
 }
 
+// VariantCount returns how many variants of the query are set. A valid
+// query has exactly one.
+func (q TokenFactoryQuery) VariantCount() int {
+	return countSet(
+		q.FullDenom != nil,
+		q.Admin != nil,
+		q.Metadata != nil,
+		q.DenomsByCreator != nil,
+		q.Params != nil,
+	)
+}
+
 // query types
 
 type FullDenom struct {

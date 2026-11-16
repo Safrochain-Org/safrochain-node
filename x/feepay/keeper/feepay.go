@@ -23,11 +23,23 @@ import (
 // (RegisterContract) and on subsequent updates (UpdateContractWalletLimit).
 const MaxWalletLimit uint64 = 1_000_000
 
+// canonicalAddress returns the canonical (lower-case) bech32 form of addr.
+// sdk.AccAddressFromBech32 accepts upper-case bech32, so without normalising,
+// the same account could be stored under several different string keys.
+// Strings that are not valid bech32 addresses are returned unchanged.
+func canonicalAddress(addr string) string {
+	acc, err := sdk.AccAddressFromBech32(addr)
+	if err != nil {
+		return addr
+	}
+	return acc.String()
+}
+
 // Check if a contract is registered as a fee pay contract
 func (k Keeper) IsContractRegistered(ctx context.Context, contractAddr string) bool {
 	store := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
 	contractsPrefix := prefix.NewStore(store, StoreKeyContracts)
-	return contractsPrefix.Has([]byte(contractAddr))
+	return contractsPrefix.Has([]byte(canonicalAddress(contractAddr)))
 }
 
 // Get a contract from KV store
@@ -40,7 +52,7 @@ func (k Keeper) GetContract(ctx context.Context, contractAddress string) (*types
 	store := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
 	contractsPrefix := prefix.NewStore(store, StoreKeyContracts)
 
-	key := []byte(contractAddress)
+	key := []byte(canonicalAddress(contractAddress))
 	bz := contractsPrefix.Get(key)
 
 	var fpc types.FeePayContract
@@ -136,7 +148,10 @@ func (k Keeper) RegisterContract(ctx context.Context, rfp *types.MsgRegisterFeeP
 		return err
 	}
 
-	k.SetFeePayContract(ctx, *rfp.FeePayContract)
+	// Store under the canonical address.
+	fpc := *rfp.FeePayContract
+	fpc.ContractAddress = contractAddr.String()
+	k.SetFeePayContract(ctx, fpc)
 	return nil
 }
 
@@ -144,6 +159,7 @@ func (k Keeper) RegisterContract(ctx context.Context, rfp *types.MsgRegisterFeeP
 func (k Keeper) SetFeePayContract(ctx context.Context, feepay types.FeePayContract) {
 	store := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
 	contractsPrefix := prefix.NewStore(store, StoreKeyContracts)
+	feepay.ContractAddress = canonicalAddress(feepay.ContractAddress)
 	key := []byte(feepay.ContractAddress)
 	bz := k.cdc.MustMarshal(&feepay)
 	contractsPrefix.Set(key, bz)
@@ -183,22 +199,31 @@ func (k Keeper) UnregisterContract(ctx context.Context, rfp *types.MsgUnregister
 	// Remove contract from KV store
 	store := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
 	prefixStore := prefix.NewStore(store, StoreKeyContracts)
-	prefixStore.Delete([]byte(rfp.ContractAddress))
+	prefixStore.Delete([]byte(contract.ContractAddress))
 
-	// Remove all usage entries for contract.
-	// SAF-01: ensure the iterator is closed to avoid leaking the underlying
-	// resources (file descriptors / cache buffers) if this function exits
-	// early or panics during iteration.
-	prefixStore = prefix.NewStore(store, StoreKeyContractUses)
-	iterator := storetypes.KVStorePrefixIterator(prefixStore, []byte(rfp.ContractAddress))
-	defer iterator.Close() //nolint:errcheck
-
+	// Remove all usage entries for the contract. The keys are collected from
+	// the prefix store first (its iterator yields prefix-stripped keys) and
+	// deleted afterwards, from the same prefix store, once the iterator is
+	// closed.
+	usesStore := prefix.NewStore(store, StoreKeyContractUses)
+	iterator := storetypes.KVStorePrefixIterator(usesStore, []byte(contract.ContractAddress+"-"))
+	var usageKeys [][]byte
 	for ; iterator.Valid(); iterator.Next() {
-		store.Delete(iterator.Key())
+		usageKeys = append(usageKeys, append([]byte(nil), iterator.Key()...))
+	}
+	if err := iterator.Close(); err != nil {
+		return err
+	}
+	for _, key := range usageKeys {
+		usesStore.Delete(key)
 	}
 
-	// Calculate coins to refund
-	coins := sdk.NewCoins(sdk.NewCoin(k.bondDenom, math.NewIntFromUint64(contract.Balance)))
+	// Calculate coins to refund (bond denom is resolved at runtime)
+	bondDenom, err := k.stakingKeeper.BondDenom(ctx)
+	if err != nil {
+		return err
+	}
+	coins := sdk.NewCoins(sdk.NewCoin(bondDenom, math.NewIntFromUint64(contract.Balance)))
 
 	// Default refund address to admin, fallback to creator
 	var refundAddr string
@@ -220,22 +245,26 @@ func (k Keeper) SetContractBalance(ctx context.Context, fpc *types.FeePayContrac
 
 	// Set new balance and save to KV store
 	fpc.Balance = newBalance
-	contractsPrefix.Set([]byte(fpc.ContractAddress), k.cdc.MustMarshal(fpc))
+	contractsPrefix.Set([]byte(canonicalAddress(fpc.ContractAddress)), k.cdc.MustMarshal(fpc))
 }
 
 // Fund an existing fee pay contract
 func (k Keeper) FundContract(ctx context.Context, fpc *types.FeePayContract, senderAddr sdk.AccAddress, coins sdk.Coins) error {
-	// Only transfer the bond denom
+	// Only transfer the bond denom (resolved at runtime from x/staking)
+	bondDenom, err := k.stakingKeeper.BondDenom(ctx)
+	if err != nil {
+		return err
+	}
 	var transferCoin sdk.Coin
 	for _, c := range coins {
-		if c.Denom == k.bondDenom {
+		if c.Denom == bondDenom {
 			transferCoin = c
 		}
 	}
 
 	// Ensure the transfer coin was set
 	if transferCoin == (sdk.Coin{}) {
-		return types.ErrInvalidSafrochainFundAmount.Wrapf("contract must be funded with '%s'", k.bondDenom)
+		return types.ErrInvalidSafrochainFundAmount.Wrapf("contract must be funded with '%s'", bondDenom)
 	}
 
 	// SAF-02: guard against uint64 overflow when crediting the contract
@@ -267,12 +296,17 @@ func (Keeper) CanContractCoverFee(fpc *types.FeePayContract, fee uint64) bool {
 	return fpc.Balance >= fee
 }
 
+// usageKey is the key of a wallet's usage entry within the contract-uses store.
+func usageKey(contractAddress, walletAddress string) []byte {
+	return []byte(canonicalAddress(contractAddress) + "-" + canonicalAddress(walletAddress))
+}
+
 // Get the number of times a wallet has interacted with a fee pay contract (err only if contract not registered)
 func (k Keeper) GetContractUses(ctx context.Context, fpc *types.FeePayContract, walletAddress string) (uint64, error) {
 	// Get usage from store
 	store := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
 	contractUsesPrefix := prefix.NewStore(store, StoreKeyContractUses)
-	key := []byte(fpc.ContractAddress + "-" + walletAddress)
+	key := usageKey(fpc.ContractAddress, walletAddress)
 	bz := contractUsesPrefix.Get(key)
 
 	var walletUsage types.FeePayWalletUsage
@@ -293,7 +327,7 @@ func (k Keeper) IncrementContractUses(ctx context.Context, fpc *types.FeePayCont
 	// Get store, key, & value for setting usage
 	store := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
 	contractUsesPrefix := prefix.NewStore(store, StoreKeyContractUses)
-	key := []byte(fpc.ContractAddress + "-" + walletAddress)
+	key := usageKey(fpc.ContractAddress, walletAddress)
 	bz, err := k.cdc.Marshal(&types.FeePayWalletUsage{
 		ContractAddress: fpc.ContractAddress,
 		WalletAddress:   walletAddress,
@@ -351,7 +385,7 @@ func (k Keeper) UpdateContractWalletLimit(ctx context.Context, fpc *types.FeePay
 	store := runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx))
 	contractsPrefix := prefix.NewStore(store, StoreKeyContracts)
 	fpc.WalletLimit = walletLimit
-	contractsPrefix.Set([]byte(fpc.ContractAddress), k.cdc.MustMarshal(fpc))
+	contractsPrefix.Set([]byte(canonicalAddress(fpc.ContractAddress)), k.cdc.MustMarshal(fpc))
 
 	return nil
 }

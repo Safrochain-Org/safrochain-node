@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	errorsmod "cosmossdk.io/errors"
 
@@ -12,6 +13,7 @@ import (
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
 	"github.com/Safrochain_Org/safrochain/x/drip/types"
+	tokenfactorytypes "github.com/Safrochain_Org/safrochain/x/tokenfactory/types"
 )
 
 var _ types.MsgServer = msgServer{}
@@ -62,6 +64,10 @@ func (ms msgServer) DistributeTokens(
 		return nil, types.ErrDripNotAllowed
 	}
 
+	if err := ms.validateDenoms(ctx, msg.Amount); err != nil {
+		return nil, err
+	}
+
 	// Get sender
 	sender, err := sdk.AccAddressFromBech32(msg.SenderAddress)
 	if err != nil {
@@ -73,6 +79,24 @@ func (ms msgServer) DistributeTokens(
 	}
 
 	return &types.MsgDistributeTokensResponse{}, nil
+}
+
+// validateDenoms enforces that only the native staking denom and tokenfactory
+// denoms are distributed.
+func (ms msgServer) validateDenoms(ctx context.Context, coins sdk.Coins) error {
+	bondDenom, err := ms.stakingKeeper.BondDenom(ctx)
+	if err != nil {
+		return errorsmod.Wrap(err, "failed to get bond denom")
+	}
+
+	for _, coin := range coins {
+		if coin.Denom == bondDenom || strings.HasPrefix(coin.Denom, tokenfactorytypes.ModuleDenomPrefix+"/") {
+			continue
+		}
+		return errorsmod.Wrapf(types.ErrDenomNotAllowed, "%s (allowed: %s or %s/...)", coin.Denom, bondDenom, tokenfactorytypes.ModuleDenomPrefix)
+	}
+
+	return nil
 }
 
 func (ms msgServer) UpdateParams(ctx context.Context, req *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {

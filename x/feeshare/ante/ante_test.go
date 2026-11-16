@@ -1,6 +1,7 @@
 package ante_test
 
 import (
+	"math/rand"
 	"testing"
 
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
@@ -105,6 +106,39 @@ func (s *AnteTestSuite) TestAnteHandle() {
 	s.Require().Equal(sdkmath.NewInt(750).Int64(), receiverBal.Amount.Int64())
 }
 
+func (s *AnteTestSuite) TestAnteHandleSkipsPayoutWhenFeeIsGranted() {
+	s.SetupTest()
+	s.FundModuleAcc(authtypes.FeeCollectorName, sdk.NewCoins(sdk.NewCoin("usaf", sdkmath.NewInt(1_000_000))))
+
+	_, _, deployer := testdata.KeyTestPubAddr()
+	_, _, granter := testdata.KeyTestPubAddr()
+	_, _, receiver := testdata.KeyTestPubAddr()
+	_, _, contractAddr := testdata.KeyTestPubAddr()
+
+	s.feeshareKeeper.SetFeeShare(s.Ctx, feesharetypes.FeeShare{
+		ContractAddress:   contractAddr.String(),
+		DeployerAddress:   deployer.String(),
+		WithdrawerAddress: receiver.String(),
+	})
+
+	executeMsg := &wasmtypes.MsgExecuteContract{
+		Sender:   deployer.String(),
+		Contract: contractAddr.String(),
+		Msg:      []byte("{}"),
+	}
+	anteDecorator := ante.NewFeeSharePayoutDecorator(s.bankKeeper, s.feeshareKeeper)
+
+	// Fee paid out of a granter's allowance: no payout.
+	_, err := anteDecorator.AnteHandle(s.Ctx, NewMockTxWithGranter(deployer, granter, executeMsg), false, EmptyAnte)
+	s.Require().NoError(err)
+	s.Require().True(s.bankKeeper.GetBalance(s.Ctx, receiver, "usaf").Amount.IsZero())
+
+	// Granter == payer behaves like a normal fee payment.
+	_, err = anteDecorator.AnteHandle(s.Ctx, NewMockTxWithGranter(deployer, deployer, executeMsg), false, EmptyAnte)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(250), s.bankKeeper.GetBalance(s.Ctx, receiver, "usaf").Amount.Int64())
+}
+
 func (s *AnteTestSuite) TestFeeLogic() {
 	s.SetupTest()
 	// We expect all to pass
@@ -143,7 +177,7 @@ func (s *AnteTestSuite) TestFeeLogic() {
 			feeCoins,
 			sdkmath.LegacyNewDecWithPrec(67, 2),
 			7,
-			sdk.NewCoins(sdk.NewCoin("usaf", sdkmath.NewInt(48)), sdk.NewCoin("utoken", sdkmath.NewInt(24))),
+			sdk.NewCoins(sdk.NewCoin("usaf", sdkmath.NewInt(47)), sdk.NewCoin("utoken", sdkmath.NewInt(23))),
 		},
 		{
 			"50% fee / 1 contracts",
@@ -164,7 +198,7 @@ func (s *AnteTestSuite) TestFeeLogic() {
 			feeCoins,
 			sdkmath.LegacyNewDecWithPrec(50, 2),
 			3,
-			sdk.NewCoins(sdk.NewCoin("usaf", sdkmath.NewInt(83)), sdk.NewCoin("utoken", sdkmath.NewInt(42))),
+			sdk.NewCoins(sdk.NewCoin("usaf", sdkmath.NewInt(83)), sdk.NewCoin("utoken", sdkmath.NewInt(41))),
 		},
 		{
 			"25% fee / 2 contracts",
@@ -202,15 +236,47 @@ func (s *AnteTestSuite) TestFeeLogic() {
 	}
 }
 
+// The total paid out (numContracts payouts) must never exceed
+// floor(DeveloperShares x fee) for any denom.
+func (s *AnteTestSuite) TestFeePayLogicNeverOverpays() {
+	rng := rand.New(rand.NewSource(1)) //nolint:gosec // deterministic test data
+	for i := 0; i < 2000; i++ {
+		fees := sdk.NewCoins(
+			sdk.NewCoin("usaf", sdkmath.NewInt(rng.Int63n(1_000_000_000)+1)),
+			sdk.NewCoin("utoken", sdkmath.NewInt(rng.Int63n(1_000_000)+1)),
+		)
+		share := sdkmath.LegacyNewDecWithPrec(rng.Int63n(101), 2)
+		numPairs := rng.Intn(20) + 1
+
+		payout := ante.FeePayLogic(fees, share, numPairs)
+		for _, fee := range fees {
+			maxTotal := share.MulInt(fee.Amount).TruncateInt()
+			total := payout.AmountOf(fee.Denom).MulRaw(int64(numPairs))
+			s.Require().True(total.LTE(maxTotal),
+				"overpaid %s: total %s > floor(%s x %s) = %s over %d contracts", fee.Denom, total, share, fee.Amount, maxTotal, numPairs)
+		}
+	}
+}
+
 type MockTx struct {
-	feePayer sdk.AccAddress
-	msgs     []sdk.Msg
+	feePayer   sdk.AccAddress
+	feeGranter sdk.AccAddress
+	msgs       []sdk.Msg
 }
 
 func NewMockTx(feePayer sdk.AccAddress, msgs ...sdk.Msg) MockTx {
 	return MockTx{
 		feePayer: feePayer,
 		msgs:     msgs,
+	}
+}
+
+// NewMockTxWithGranter returns a MockTx whose fee is paid by feeGranter.
+func NewMockTxWithGranter(feePayer, feeGranter sdk.AccAddress, msgs ...sdk.Msg) MockTx {
+	return MockTx{
+		feePayer:   feePayer,
+		feeGranter: feeGranter,
+		msgs:       msgs,
 	}
 }
 
@@ -226,8 +292,8 @@ func (tx MockTx) FeePayer() []byte {
 	return tx.feePayer
 }
 
-func (MockTx) FeeGranter() []byte {
-	return nil
+func (tx MockTx) FeeGranter() []byte {
+	return tx.feeGranter
 }
 
 func (tx MockTx) GetMsgs() []sdk.Msg {

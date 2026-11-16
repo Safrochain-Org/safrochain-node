@@ -15,11 +15,6 @@ func (k Keeper) mintTo(ctx context.Context, amount sdk.Coin, mintTo string) erro
 		return err
 	}
 
-	err = k.bankKeeper.MintCoins(ctx, types.ModuleName, sdk.NewCoins(amount))
-	if err != nil {
-		return err
-	}
-
 	addr, err := sdk.AccAddressFromBech32(mintTo)
 	if err != nil {
 		return err
@@ -27,6 +22,11 @@ func (k Keeper) mintTo(ctx context.Context, amount sdk.Coin, mintTo string) erro
 
 	if k.IsModuleAcc(addr) {
 		return types.ErrModuleAccount
+	}
+
+	err = k.bankKeeper.MintCoins(ctx, types.ModuleName, sdk.NewCoins(amount))
+	if err != nil {
+		return err
 	}
 
 	return k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName,

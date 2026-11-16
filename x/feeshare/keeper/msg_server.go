@@ -56,7 +56,11 @@ func (k Keeper) GetContractAdminOrCreatorAddress(ctx sdk.Context, contract sdk.A
 		return nil, errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "invalid deployer address %s", deployer)
 	}
 
-	// Retrieve contract info
+	// Retrieve contract info; GetContractInfo returns nil for an address that
+	// is not a contract.
+	if !k.wasmKeeper.HasContractInfo(ctx, contract) {
+		return nil, errorsmod.Wrapf(types.ErrFeeShareNoContractDeployed, "no contract found at address %s", contract)
+	}
 	info := k.wasmKeeper.GetContractInfo(ctx, contract)
 
 	// Check if the contract has an admin
@@ -122,6 +126,12 @@ func (k Keeper) RegisterFeeShare(
 	msgSender, err := sdk.AccAddressFromBech32(msg.DeployerAddress)
 	if err != nil {
 		return nil, errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "invalid deployer address %s", msg.DeployerAddress)
+	}
+
+	// The address must be an instantiated contract (GetContractInfo returns
+	// nil otherwise).
+	if !k.wasmKeeper.HasContractInfo(ctx, contract) {
+		return nil, errorsmod.Wrapf(types.ErrFeeShareNoContractDeployed, "no contract found at address %s", msg.ContractAddress)
 	}
 
 	var deployer sdk.AccAddress
