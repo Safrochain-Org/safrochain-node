@@ -1,11 +1,9 @@
 name: Dispatch Release to safrochain-std
 
+# Manual only: the target repository and DISPATCH_TOKEN are not configured,
+# so every run since v0.2.1 failed.
 on:
-  release:
-    types: [released]
-  push:
-    tags:
-    - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
 
 env:
   SAFROCHAIN_REPO: "https://github.com/Safrochain_Org/safrochain.git"
