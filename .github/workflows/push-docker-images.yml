@@ -1,4 +1,4 @@
-# This workflow pushes new safrochain docker images on every new tag.
+# This workflow pushes safrochain docker images for a version tag (manual only, see below).
 #
 # On every new `vX.Y.Z` tag the following images are pushed:
 #
@@ -21,12 +21,11 @@
 
 name: Push Docker Images
 
+# Manual only: every run since v0.2.1 failed. Before running it again on
+# tags, fix the image names (ghcr.io/safrochain-org/...) and grant the job
+# `packages: write`. Release binaries come from release-binaries.yml.
 on:
-  release:
-    types: [published, created, edited]
-  push:
-    tags:
-    - 'v[0-9]+.[0-9]+.[0-9]+' # ignore rc
+  workflow_dispatch:
 
 jobs:
   safrochain-images:
