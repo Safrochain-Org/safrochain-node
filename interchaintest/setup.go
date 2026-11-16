@@ -36,7 +36,7 @@ var (
 	SafrochainImage = ibc.DockerImage{
 		Repository: safrochainRepo,
 		Version:    safrochainVersion,
-		UIDGID:     "1025:1025",
+		UIDGID:     "1000:1000", // the non-root user of the Dockerfile
 	}
 
 	// SDK v47 Genesis

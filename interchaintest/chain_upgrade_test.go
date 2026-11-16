@@ -36,7 +36,7 @@ const (
 var baseChain = ibc.DockerImage{
 	Repository: SafrochainMainRepo,
 	Version:    "v27.0.0",
-	UIDGID:     "1025:1025",
+	UIDGID:     "1000:1000", // the non-root user of the Dockerfile
 }
 
 func TestBasicSafrochainUpgrade(t *testing.T) {

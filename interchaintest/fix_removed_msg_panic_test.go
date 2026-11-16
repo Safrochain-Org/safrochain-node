@@ -29,14 +29,14 @@ const (
 var v27Chain = ibc.DockerImage{
 	Repository: SafrochainMainRepo,
 	Version:    "v27.0.0",
-	UIDGID:     "1025:1025",
+	UIDGID:     "1000:1000", // the non-root user of the Dockerfile
 }
 
 // v28Chain is the second version of safrochain that will be upgraded from
 var v28Chain = ibc.DockerImage{
 	Repository: SafrochainMainRepo,
 	Version:    "v28.0.2",
-	UIDGID:     "1025:1025",
+	UIDGID:     "1000:1000", // the non-root user of the Dockerfile
 }
 
 func TestFixRemovedMsgTypeQueryPanic(t *testing.T) {
