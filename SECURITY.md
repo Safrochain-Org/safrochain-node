@@ -10,11 +10,15 @@ The Safrochain team takes the security of the Safrochain node software seriously
 
 Only the versions listed below actively receive security patches and updates. Please ensure you are running a supported version before reporting a vulnerability.
 
-| Version | Supported |
-|---------|-----------|
-| Latest (`main` branch) | ✅ Yes |
-| Previous minor release | ✅ Yes |
-| Older releases | ❌ No — please upgrade |
+| Version | Network | Supported |
+|---------|---------|-----------|
+| `v0.3.x` | mainnet `safrochain-1` from block 4,557,100 | ✅ Yes |
+| `v0.2.x` | mainnet `safrochain-1` until block 4,557,100 | ⚠️ Until the v0.3.0 upgrade height only |
+| `release/v0.1.0` | testnet `safro-testnet-1` | ⚠️ Testnet only, replaced by `v0.3.0` at the testnet upgrade |
+| Older releases | — | ❌ No — please upgrade |
+
+Run the version that the network runs at its current height: see the
+[v0.3.0 upgrade guide](https://docs.safrochain.com/governance/mainnet-upgrade-v0.3.0).
 
 > **Recommendation:** Always run the latest release to benefit from all security patches.
 
