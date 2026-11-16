@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	"cosmossdk.io/collections"
 
@@ -39,11 +40,21 @@ func NewProposal(prop v1.Proposal) Proposal {
 		ProposalID: prop.Id,
 		Proposer:   prop.Proposer,
 		Status:     uint(prop.Status),
-		SubmitTime: strconv.Itoa(prop.SubmitTime.Second()),
+		SubmitTime: formatSubmitTime(prop),
 		Metadata:   prop.GetMetadata(),
 		Title:      prop.GetTitle(),
 		Summary:    prop.GetSummary(),
 	}
+}
+
+// formatSubmitTime returns the proposal submission time in RFC 3339 (UTC), or
+// an empty string if it is unset. It previously returned only the
+// seconds-of-minute component of the time.
+func formatSubmitTime(prop v1.Proposal) string {
+	if prop.SubmitTime == nil {
+		return ""
+	}
+	return prop.SubmitTime.UTC().Format(time.RFC3339Nano)
 }
 
 type Vote struct {
@@ -76,71 +87,62 @@ type SudoAfterProposalVotingPeriodEnded struct {
 	AfterProposalVotingPeriodEnded string `json:"after_proposal_voting_period_ended"`
 }
 
-func (h GovHooks) AfterProposalSubmission(ctx context.Context, proposalID uint64) error {
+// The GovHooks methods below never return an error: x/gov returns hook errors
+// from proposal submission, deposits and votes, so a failing contract would
+// censor governance — including any proposal meant to fix the problem. See
+// ExecuteMessageOnContracts.
+
+// dispatch encodes msg and delivers it to every registered governance
+// contract.
+func (h GovHooks) dispatch(ctx context.Context, hook string, msg any) {
+	msgBz, err := json.Marshal(msg)
+	if err != nil {
+		h.k.Logger(ctx).Error("failed to encode governance hook message", "hook", hook, "error", err)
+		return
+	}
+
+	h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz)
+}
+
+// proposal loads the proposal a hook refers to. It reports false, after
+// logging, when the proposal cannot be loaded.
+func (h GovHooks) proposal(ctx context.Context, hook string, proposalID uint64) (v1.Proposal, bool) {
 	prop, err := h.k.govKeeper.Proposals.Get(ctx, proposalID)
 	if err != nil {
-		return err
+		h.k.Logger(ctx).Error("skipping governance hook: proposal not found", "hook", hook, "proposal_id", proposalID, "error", err)
+		return v1.Proposal{}, false
 	}
 
-	msgBz, err := json.Marshal(SudoMsgAfterProposalSubmission{
-		AfterProposalSubmission: NewProposal(prop),
-	})
-	if err != nil {
-		return err
-	}
+	return prop, true
+}
 
-	if err := h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz); err != nil {
-		// SAF-04: surface the contract execution failure via the module logger
-		// and return the original error. The previous `_, err = fmt.Println(...)`
-		// pattern overwrote `err` with the (always nil) error returned by
-		// fmt.Println, silently dropping every contract failure.
-		h.k.Logger(ctx).Error("AfterProposalSubmission contract hook failed", "error", err)
-		return err
+func (h GovHooks) AfterProposalSubmission(ctx context.Context, proposalID uint64) error {
+	const hook = "AfterProposalSubmission"
+	if prop, ok := h.proposal(ctx, hook, proposalID); ok {
+		h.dispatch(ctx, hook, SudoMsgAfterProposalSubmission{AfterProposalSubmission: NewProposal(prop)})
 	}
 
 	return nil
 }
 
 func (h GovHooks) AfterProposalDeposit(ctx context.Context, proposalID uint64, _ sdk.AccAddress) error {
-	prop, err := h.k.govKeeper.Proposals.Get(ctx, proposalID)
-	if err != nil {
-		return err
-	}
-
-	msgBz, err := json.Marshal(SudoMsgAfterProposalDeposit{
-		AfterProposalDeposit: NewProposal(prop),
-	})
-	if err != nil {
-		return err
-	}
-
-	if err := h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz); err != nil {
-		// SAF-04: see AfterProposalSubmission for rationale.
-		h.k.Logger(ctx).Error("AfterProposalDeposit contract hook failed", "error", err)
-		return err
+	const hook = "AfterProposalDeposit"
+	if prop, ok := h.proposal(ctx, hook, proposalID); ok {
+		h.dispatch(ctx, hook, SudoMsgAfterProposalDeposit{AfterProposalDeposit: NewProposal(prop)})
 	}
 
 	return nil
 }
 
 func (h GovHooks) AfterProposalVote(ctx context.Context, proposalID uint64, voterAddr sdk.AccAddress) error {
+	const hook = "AfterProposalVote"
 	vote, err := h.k.govKeeper.Votes.Get(ctx, collections.Join(proposalID, voterAddr))
 	if err != nil {
-		return err
+		h.k.Logger(ctx).Error("skipping governance hook: vote not found", "hook", hook, "proposal_id", proposalID, "voter", voterAddr.String(), "error", err)
+		return nil
 	}
 
-	msgBz, err := json.Marshal(SudoMsgAfterProposalVote{
-		AfterProposalVote: NewVote(vote),
-	})
-	if err != nil {
-		return err
-	}
-
-	if err := h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz); err != nil {
-		// SAF-04: see AfterProposalSubmission for rationale.
-		h.k.Logger(ctx).Error("AfterProposalVote contract hook failed", "error", err)
-		return err
-	}
+	h.dispatch(ctx, hook, SudoMsgAfterProposalVote{AfterProposalVote: NewVote(vote)})
 
 	return nil
 }
@@ -150,18 +152,9 @@ func (GovHooks) AfterProposalFailedMinDeposit(_ context.Context, _ uint64) error
 }
 
 func (h GovHooks) AfterProposalVotingPeriodEnded(ctx context.Context, proposalID uint64) error {
-	msgBz, err := json.Marshal(SudoAfterProposalVotingPeriodEnded{
-		AfterProposalVotingPeriodEnded: strconv.Itoa(int(proposalID)),
+	h.dispatch(ctx, "AfterProposalVotingPeriodEnded", SudoAfterProposalVotingPeriodEnded{
+		AfterProposalVotingPeriodEnded: strconv.FormatUint(proposalID, 10),
 	})
-	if err != nil {
-		return err
-	}
-
-	if err := h.k.ExecuteMessageOnContracts(ctx, types.KeyPrefixGov, msgBz); err != nil {
-		// SAF-04: see AfterProposalSubmission for rationale.
-		h.k.Logger(ctx).Error("AfterProposalVotingPeriodEnded contract hook failed", "error", err)
-		return err
-	}
 
 	return nil
 }

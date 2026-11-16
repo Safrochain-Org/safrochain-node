@@ -32,7 +32,7 @@ type Keeper struct {
 	wasmKeeper    wasmkeeper.Keeper
 	accountKeeper authkeeper.AccountKeeper
 
-	bondDenom string
+	stakingKeeper feepaytypes.StakingKeeper
 
 	// the address capable of executing a MsgUpdateParams message. Typically, this
 	// should be the x/gov module account.
@@ -46,7 +46,7 @@ func NewKeeper(
 	bk bankkeeper.Keeper,
 	wk wasmkeeper.Keeper,
 	ak authkeeper.AccountKeeper,
-	bondDenom string,
+	sk feepaytypes.StakingKeeper,
 	authority string,
 ) Keeper {
 	return Keeper{
@@ -55,7 +55,7 @@ func NewKeeper(
 		bankKeeper:    bk,
 		wasmKeeper:    wk,
 		accountKeeper: ak,
-		bondDenom:     bondDenom,
+		stakingKeeper: sk,
 		authority:     authority,
 	}
 }

@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"os"
 	"slices"
-	"strconv"
-	"strings"
 
 	wasm "github.com/CosmWasm/wasmd/x/wasm"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
@@ -24,7 +22,6 @@ import (
 
 	dbm "github.com/cosmos/cosmos-db"
 	"github.com/cosmos/gogoproto/proto"
-	ibctransfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	ibcclienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
 	ibcchanneltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 
@@ -67,15 +64,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/gov"
 	govclient "github.com/cosmos/cosmos-sdk/x/gov/client"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
-	mintkeeper "github.com/cosmos/cosmos-sdk/x/mint/keeper"
-	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	paramsclient "github.com/cosmos/cosmos-sdk/x/params/client"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 
 	"github.com/Safrochain_Org/safrochain/app/keepers"
 	upgrades "github.com/Safrochain_Org/safrochain/app/upgrades"
-	v28 "github.com/Safrochain_Org/safrochain/app/upgrades/v28"
-	v29 "github.com/Safrochain_Org/safrochain/app/upgrades/v29"
+	v030 "github.com/Safrochain_Org/safrochain/app/upgrades/v030"
 	"github.com/Safrochain_Org/safrochain/docs"
 )
 
@@ -95,9 +89,12 @@ var (
 	// https://github.com/CosmWasm/wasmd/blob/02a54d33ff2c064f3539ae12d75d027d9c665f05/x/wasm/internal/types/proposal.go#L28-L34
 	EnableSpecificProposals = ""
 
+	// Upgrades lists the upgrade handlers this binary can execute. The v28
+	// and v29 handlers inherited from the Juno code base were removed: no
+	// upgrade was ever applied on Safrochain (x/upgrade has no applied plan
+	// for either name), and they implemented Juno-specific migrations.
 	Upgrades = []upgrades.Upgrade{
-		v28.Upgrade,
-		v29.Upgrade,
+		v030.Upgrade,
 	}
 
 	_ runtime.AppI            = (*App)(nil)
@@ -125,8 +122,6 @@ type App struct {
 	// simulation
 	configurator module.Configurator
 	sm           *module.SimulationManager
-
-	MintKeeper mintkeeper.Keeper
 }
 
 // New returns a reference to an initialized Safrochain.
@@ -185,7 +180,6 @@ func New(
 		keepers.GetMaccPerms(),
 		appOpts,
 		wasmOpts,
-		app.GetChainBondDenom(),
 		app.homePath,
 	)
 
@@ -209,12 +203,6 @@ func New(
 		panic(err)
 	}
 	app.txConfig = txConfig
-
-	if maxSize := os.Getenv("MAX_WASM_SIZE"); maxSize != "" {
-		// https://github.com/CosmWasm/wasmd#compile-time-parameters
-		val, _ := strconv.ParseInt(maxSize, 10, 32)
-		wasmtypes.MaxWasmSize = int(val)
-	}
 
 	app.configurator = module.NewConfigurator(appCodec, app.MsgServiceRouter(), app.GRPCQueryRouter())
 	app.ModuleManager = module.NewManager(appModules(app, txConfig, appCodec, skipGenesisInvariants)...)
@@ -274,7 +262,6 @@ func New(
 				SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 			},
 			StakingKeeper: *app.AppKeepers.StakingKeeper,
-			BondDenom:     app.GetChainBondDenom(),
 			BankKeeper:    app.AppKeepers.BankKeeper,
 
 			IBCKeeper: app.AppKeepers.IBCKeeper,
@@ -360,33 +347,18 @@ func New(
 	)
 	app.sm.RegisterStoreDecoders()
 
-	app.MintKeeper = mintkeeper.NewKeeper(
-		app.appCodec,
-		runtime.NewKVStoreService(app.AppKeepers.GetKey(minttypes.StoreKey)),
-		app.AppKeepers.StakingKeeper,
-		app.AppKeepers.AccountKeeper,
-		app.AppKeepers.BankKeeper,
-		authtypes.FeeCollectorName,
-		app.AppKeepers.GovKeeper.GetAuthority(),
-	)
-
 	return app
 }
 
 func GetDefaultBypassFeeMessages() []string {
+	// Only relayer packet-lifecycle messages may bypass the minimum fee.
+	// User-originated or state-creating messages (MsgTransfer, client and
+	// channel handshakes, client upgrades) must pay fees.
 	return []string{
-		// IBC
 		sdk.MsgTypeURL(&ibcchanneltypes.MsgRecvPacket{}),
 		sdk.MsgTypeURL(&ibcchanneltypes.MsgAcknowledgement{}),
-		sdk.MsgTypeURL(&ibcclienttypes.MsgCreateClient{}),
-		sdk.MsgTypeURL(&ibcclienttypes.MsgUpdateClient{}),
-		sdk.MsgTypeURL(&ibcclienttypes.MsgUpgradeClient{}),
-		sdk.MsgTypeURL(&ibctransfertypes.MsgTransfer{}),
 		sdk.MsgTypeURL(&ibcchanneltypes.MsgTimeout{}),
-		sdk.MsgTypeURL(&ibcchanneltypes.MsgTimeoutOnClose{}),
-		sdk.MsgTypeURL(&ibcchanneltypes.MsgChannelOpenTry{}),
-		sdk.MsgTypeURL(&ibcchanneltypes.MsgChannelOpenConfirm{}),
-		sdk.MsgTypeURL(&ibcchanneltypes.MsgChannelOpenAck{}),
+		sdk.MsgTypeURL(&ibcclienttypes.MsgUpdateClient{}),
 	}
 }
 
@@ -610,11 +582,4 @@ func (app *App) setupUpgradeHandlers() {
 // SimulationManager implements the SimulationApp interface
 func (app *App) SimulationManager() *module.SimulationManager {
 	return app.sm
-}
-
-func (app *App) GetChainBondDenom() string {
-	if strings.HasPrefix(app.ChainID(), "safro-") {
-		return "usaft" // testnet/devnet
-	}
-	return "usaf" // mainnet
 }

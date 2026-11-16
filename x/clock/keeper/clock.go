@@ -3,11 +3,13 @@ package keeper
 import (
 	"context"
 
+	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/query"
 
 	globalerrors "github.com/Safrochain_Org/safrochain/app/helpers"
@@ -136,8 +138,25 @@ func (k Keeper) RemoveContract(ctx context.Context, contractAddress string) {
 	}
 }
 
+// canonicalAddress returns the canonical (lower-case) bech32 encoding of a
+// contract address. Contracts are keyed by their address string and bech32
+// decoding is case-insensitive, so without normalisation the same contract
+// could be registered (and executed every block) twice.
+func canonicalAddress(contractAddress string) (string, error) {
+	addr, err := sdk.AccAddressFromBech32(contractAddress)
+	if err != nil {
+		return "", errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "invalid contract address %q: %s", contractAddress, err)
+	}
+	return addr.String(), nil
+}
+
 // Register a clock contract address in the KV store.
 func (k Keeper) RegisterContract(ctx context.Context, senderAddress string, contractAddress string) error {
+	contractAddress, err := canonicalAddress(contractAddress)
+	if err != nil {
+		return err
+	}
+
 	// Check if the contract is already registered
 	if k.IsClockContract(ctx, contractAddress) {
 		return globalerrors.ErrContractAlreadyRegistered
@@ -157,6 +176,11 @@ func (k Keeper) RegisterContract(ctx context.Context, senderAddress string, cont
 
 // Unregister a clock contract from either the jailed or unjailed KV store.
 func (k Keeper) UnregisterContract(ctx context.Context, senderAddress string, contractAddress string) error {
+	contractAddress, err := canonicalAddress(contractAddress)
+	if err != nil {
+		return err
+	}
+
 	// Check if the contract is registered in either store
 	if !k.IsClockContract(ctx, contractAddress) {
 		return globalerrors.ErrContractNotRegistered
@@ -198,6 +222,11 @@ func (k Keeper) SetJailStatus(ctx context.Context, contractAddress string, isJai
 
 // Set the jail status of a clock contract by the sender address.
 func (k Keeper) SetJailStatusBySender(ctx context.Context, senderAddress string, contractAddress string, jailStatus bool) error {
+	contractAddress, err := canonicalAddress(contractAddress)
+	if err != nil {
+		return err
+	}
+
 	// Ensure the sender is the contract admin or creator
 	if ok, err := k.IsContractManager(ctx, senderAddress, contractAddress); !ok {
 		return err
@@ -210,7 +239,10 @@ func (k Keeper) SetJailStatusBySender(ctx context.Context, senderAddress string,
 // an admin is present, they are considered the manager. If there is no admin, the
 // contract creator is considered the manager.
 func (k Keeper) IsContractManager(ctx context.Context, senderAddress string, contractAddress string) (bool, error) {
-	contractAddr := sdk.MustAccAddressFromBech32(contractAddress)
+	contractAddr, err := sdk.AccAddressFromBech32(contractAddress)
+	if err != nil {
+		return false, errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "invalid contract address %q: %s", contractAddress, err)
+	}
 
 	// Ensure the contract is a cosm wasm contract
 	if ok := k.wasmKeeper.HasContractInfo(ctx, contractAddr); !ok {

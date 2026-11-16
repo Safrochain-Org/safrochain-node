@@ -2,6 +2,9 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
+
+	errorsmod "cosmossdk.io/errors"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -33,18 +36,39 @@ func GetGenesisStateFromAppState(cdc codec.Codec, appState map[string]json.RawMe
 	return &genesisState
 }
 
+// ValidateGenesis validates the cw-hooks genesis state: params, contract
+// addresses, duplicates and the per-hook registration cap.
 func ValidateGenesis(data GenesisState) error {
-	for _, v := range data.StakingContractAddresses {
-		if _, err := sdk.AccAddressFromBech32(v); err != nil {
-			return err
-		}
+	if err := data.Params.Validate(); err != nil {
+		return errorsmod.Wrap(err, "params")
 	}
 
-	for _, v := range data.GovContractAddresses {
-		if _, err := sdk.AccAddressFromBech32(v); err != nil {
-			return err
-		}
+	if err := validateContractList("staking", data.StakingContractAddresses); err != nil {
+		return err
 	}
 
-	return data.Params.Validate()
+	return validateContractList("governance", data.GovContractAddresses)
+}
+
+func validateContractList(hook string, addrs []string) error {
+	if len(addrs) > MaxContractsPerHook {
+		return fmt.Errorf("%s: %d contracts registered, at most %d allowed", hook, len(addrs), MaxContractsPerHook)
+	}
+
+	seen := make(map[string]struct{}, len(addrs))
+	for _, v := range addrs {
+		addr, err := sdk.AccAddressFromBech32(v)
+		if err != nil {
+			return errorsmod.Wrapf(err, "%s: invalid contract address %q", hook, v)
+		}
+
+		// Compare canonical encodings: bech32 decoding is case-insensitive.
+		key := addr.String()
+		if _, dup := seen[key]; dup {
+			return fmt.Errorf("%s: duplicate contract address %s", hook, key)
+		}
+		seen[key] = struct{}{}
+	}
+
+	return nil
 }

@@ -74,7 +74,7 @@ func (mfd FeeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, ne
 	}
 
 	// Get local minimum-gas-prices
-	localFees := GetMinGasPrice(ctx, int64(feeTx.GetGas()))
+	localFees := GetMinGasPrice(ctx, feeTx.GetGas())
 
 	// CombinedFeeRequirement should never be empty since
 	// global fee is set to its default value, i.e. 0uatom, if empty
@@ -165,7 +165,7 @@ func (mfd FeeDecorator) GetGlobalFee(ctx context.Context, feeTx sdk.FeeTx) (sdk.
 	requiredGlobalFees := make(sdk.Coins, len(globalMinGasPrices))
 	// Determine the required fees by multiplying each required minimum gas
 	// price by the gas limit, where fee = ceil(minGasPrice * gasLimit).
-	glDec := sdkmath.LegacyNewDec(int64(feeTx.GetGas()))
+	glDec := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(feeTx.GetGas()))
 	for i, gp := range globalMinGasPrices {
 		fee := gp.Amount.Mul(glDec)
 		requiredGlobalFees[i] = sdk.NewCoin(gp.Denom, fee.Ceil().RoundInt())
@@ -209,7 +209,7 @@ func (mfd FeeDecorator) ContainsOnlyBypassMinFeeMsgs(msgs []sdk.Msg) bool {
 
 // GetMinGasPrice returns the validator's minimum gas prices
 // fees given a gas limit
-func GetMinGasPrice(ctx context.Context, gasLimit int64) sdk.Coins {
+func GetMinGasPrice(ctx context.Context, gasLimit uint64) sdk.Coins {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	minGasPrices := sdkCtx.MinGasPrices()
 	// special case: if minGasPrices=[], requiredFees=[]
@@ -220,7 +220,7 @@ func GetMinGasPrice(ctx context.Context, gasLimit int64) sdk.Coins {
 	requiredFees := make(sdk.Coins, len(minGasPrices))
 	// Determine the required fees by multiplying each required minimum gas
 	// price by the gas limit, where fee = ceil(minGasPrice * gasLimit).
-	glDec := sdkmath.LegacyNewDec(gasLimit)
+	glDec := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(gasLimit))
 	for i, gp := range minGasPrices {
 		fee := gp.Amount.Mul(glDec)
 		requiredFees[i] = sdk.NewCoin(gp.Denom, fee.Ceil().RoundInt())

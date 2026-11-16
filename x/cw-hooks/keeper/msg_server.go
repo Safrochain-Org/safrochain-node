@@ -115,34 +115,48 @@ func (k msgServer) UnregisterStaking(goCtx context.Context, req *types.MsgUnregi
 	return &types.MsgUnregisterStakingResponse{}, nil
 }
 
-func (k msgServer) isContractSenderAuthorized(ctx sdk.Context, sender string, contract sdk.AccAddress) error {
-	if ok := k.GetWasmKeeper().HasContractInfo(ctx, contract); !ok {
-		return errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "contract does not exist: %s", contract)
+// isContractManager reports whether sender manages contract: its admin if it
+// has one, otherwise its creator. This matches x/clock and x/feepay and the
+// cw-hooks spec ("admin of the contract, or the creator if there is no
+// admin").
+func (k msgServer) isContractManager(ctx sdk.Context, sender string, contract sdk.AccAddress) (bool, error) {
+	if !k.GetWasmKeeper().HasContractInfo(ctx, contract) {
+		return false, errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "contract does not exist: %s", contract)
 	}
 
 	contractInfo := k.GetWasmKeeper().GetContractInfo(ctx, contract)
-
-	if contractInfo.Creator != "" && contractInfo.Creator != sender {
-		return errorsmod.Wrapf(sdkerrors.ErrUnauthorized, "sender is not the contract creator")
-	} else if contractInfo.Admin != "" && contractInfo.Admin != sender {
-		return errorsmod.Wrapf(sdkerrors.ErrUnauthorized, "sender is not the contract admin")
+	if contractInfo.Admin != "" {
+		return contractInfo.Admin == sender, nil
 	}
 
-	return nil
+	return contractInfo.Creator == sender, nil
 }
 
+// handleContractRegister registers a contract for a hook type.
+//
+// Only the governance authority can register a contract. Hooks run inside the
+// staking and governance flows (including Begin/EndBlock) and every user pays
+// for their gas, so each contract must be vetted by governance first.
 func (k msgServer) handleContractRegister(ctx sdk.Context, sender, contractAddr string, keyPrefix []byte, prefixModuleName string) error {
+	if sender != k.authority {
+		return errorsmod.Wrapf(govtypes.ErrInvalidSigner, "only the governance authority (%s) can register %s hook contracts; submit a governance proposal", k.authority, prefixModuleName)
+	}
+
 	contract, err := sdk.AccAddressFromBech32(contractAddr)
 	if err != nil {
 		return errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "invalid contract address (%s)", err)
+	}
+
+	if !k.GetWasmKeeper().HasContractInfo(ctx, contract) {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "contract does not exist: %s", contract)
 	}
 
 	if k.IsContractRegistered(ctx, keyPrefix, contract) {
 		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "contract already registered for %s", prefixModuleName)
 	}
 
-	if err := k.isContractSenderAuthorized(ctx, sender, contract); err != nil {
-		return err
+	if k.CountContracts(ctx, keyPrefix) >= types.MaxContractsPerHook {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "at most %d contracts can be registered for %s hooks", types.MaxContractsPerHook, prefixModuleName)
 	}
 
 	k.SetContract(ctx, keyPrefix, contract)
@@ -150,6 +164,9 @@ func (k msgServer) handleContractRegister(ctx sdk.Context, sender, contractAddr 
 	return nil
 }
 
+// handleContractRemoval unregisters a contract from a hook type. The
+// governance authority can remove any contract (emergency path); the contract
+// manager (admin, or creator if there is no admin) can remove its own.
 func (k msgServer) handleContractRemoval(ctx sdk.Context, sender, contractAddr string, keyPrefix []byte, prefixModuleName string) error {
 	contract, err := sdk.AccAddressFromBech32(contractAddr)
 	if err != nil {
@@ -160,8 +177,16 @@ func (k msgServer) handleContractRemoval(ctx sdk.Context, sender, contractAddr s
 		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "contract is not registered for %s", prefixModuleName)
 	}
 
-	if err := k.isContractSenderAuthorized(ctx, sender, contract); err != nil {
-		return err
+	if sender != k.authority {
+		// A registered contract may have been deleted from x/wasm since
+		// registration; only governance can remove it then.
+		isManager, err := k.isContractManager(ctx, sender, contract)
+		if err != nil {
+			return err
+		}
+		if !isManager {
+			return errorsmod.Wrapf(sdkerrors.ErrUnauthorized, "only the contract admin (or creator if it has no admin) or the governance authority can unregister it")
+		}
 	}
 
 	k.DeleteContract(ctx, keyPrefix, contract)

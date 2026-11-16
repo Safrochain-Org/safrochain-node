@@ -155,10 +155,13 @@ func NewRootCmd() *cobra.Command {
 			customAppTemplate, customAppConfig := initAppConfig()
 			customCmtConfig := initCometConfig(timeoutCommit)
 
-			// Force faster block times
-			err = os.Setenv("SAFROCHAIND_CONSENSUS_TIMEOUT_COMMIT", cast.ToString(timeoutCommit))
-			if err != nil {
-				return err
+			// Default to faster block times, but never override a value the
+			// operator set explicitly through the environment.
+			const timeoutCommitEnv = "SAFROCHAIND_CONSENSUS_TIMEOUT_COMMIT"
+			if _, set := os.LookupEnv(timeoutCommitEnv); !set {
+				if err := os.Setenv(timeoutCommitEnv, cast.ToString(timeoutCommit)); err != nil {
+					return err
+				}
 			}
 
 			return server.InterceptConfigsPreRunHandler(cmd, customAppTemplate, customAppConfig, customCmtConfig)

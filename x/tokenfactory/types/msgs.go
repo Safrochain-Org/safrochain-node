@@ -9,7 +9,21 @@ import (
 )
 
 // ValidateBasic does a sanity check on the provided msg.
-func (MsgCreateDenom) ValidateBasic() error {
+func (m MsgCreateDenom) ValidateBasic() error {
+	_, err := sdk.AccAddressFromBech32(m.Sender)
+	if err != nil {
+		return errorsmod.Wrapf(ErrInvalidCreator, "Invalid sender address (%s)", err)
+	}
+
+	if m.Subdenom == "" {
+		return errorsmod.Wrap(ErrInvalidDenom, "subdenom must not be empty")
+	}
+
+	_, err = GetTokenDenom(m.Sender, m.Subdenom)
+	if err != nil {
+		return errorsmod.Wrap(ErrInvalidDenom, err.Error())
+	}
+
 	return nil
 }
 

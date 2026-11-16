@@ -75,7 +75,7 @@ func TestGenesisState_Validate(t *testing.T) {
 					},
 				},
 			},
-			valid: true,
+			valid: false,
 		},
 		{
 			desc: "no admin",
@@ -86,7 +86,7 @@ func TestGenesisState_Validate(t *testing.T) {
 					},
 				},
 			},
-			valid: true,
+			valid: false,
 		},
 		{
 			desc: "invalid admin",
@@ -109,13 +109,13 @@ func TestGenesisState_Validate(t *testing.T) {
 					{
 						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
-							Admin: "",
+							Admin: tfTestCreator,
 						},
 					},
 					{
 						Denom: "factory/" + tfTestCreator + "/litecoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
-							Admin: "",
+							Admin: tfTestCreator,
 						},
 					},
 				},
@@ -129,13 +129,13 @@ func TestGenesisState_Validate(t *testing.T) {
 					{
 						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
-							Admin: "",
+							Admin: tfTestCreator,
 						},
 					},
 					{
 						Denom: "factory/" + tfTestCreator + "/bitcoin",
 						AuthorityMetadata: types.DenomAuthorityMetadata{
-							Admin: "",
+							Admin: tfTestCreator,
 						},
 					},
 				},

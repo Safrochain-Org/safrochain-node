@@ -3,7 +3,6 @@ package keeper
 import (
 	"context"
 
-	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
 
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -16,80 +15,95 @@ import (
 var endBlockSudoMessage = []byte(types.EndBlockSudoMessage)
 
 // EndBlocker executes on contracts at the end of the block.
+//
+// Each unjailed contract runs in its own cached context with its own gas
+// meter. A contract whose execution fails (error, out of gas or panic) has all
+// of its state changes reverted and is jailed; the failure never affects the
+// other contracts.
+//
+// The total gas consumed by clock contracts in a block is bounded by
+// types.MaxBlockGas: a contract only starts if the remaining budget still
+// covers a full ContractGasLimit. Iteration starts at an offset that rotates
+// with the block height, so when the budget cannot cover every contract they
+// are served round-robin and none is starved.
 func EndBlocker(ctx context.Context, k Keeper) error {
 	start := telemetry.Now()
 	defer telemetry.ModuleMeasureSince(types.ModuleName, start, telemetry.MetricKeyEndBlocker)
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-
 	logger := k.Logger(ctx)
 	p := k.GetParams(ctx)
 
-	// Get all contracts
 	contracts, err := k.GetAllContracts(ctx)
 	if err != nil {
 		logger.Error("Failed to get contracts", "error", err)
 		return err
 	}
 
-	// Track errors
-	errorExecs := make([]string, len(contracts))
-	errorExists := false
+	active := make([]string, 0, len(contracts))
+	for _, contract := range contracts {
+		if !contract.IsJailed {
+			active = append(active, contract.ContractAddress)
+		}
+	}
+	if len(active) == 0 {
+		return nil
+	}
 
-	// Execute all contracts that are not jailed
-	for idx, contract := range contracts {
-		// Skip jailed contracts
-		if contract.IsJailed {
-			continue
+	var (
+		failed  []string
+		gasUsed uint64
+		offset  = int(uint64(sdkCtx.BlockHeight()) % uint64(len(active))) //nolint:gosec // modulo of a non-negative height
+	)
+
+	for i := range active {
+		if types.MaxBlockGas-gasUsed < p.ContractGasLimit {
+			logger.Debug("clock block gas budget exhausted", "executed", i, "registered", len(active))
+			break
 		}
 
-		// Get sdk.AccAddress from contract address
-		contractAddr := sdk.MustAccAddressFromBech32(contract.ContractAddress)
-		if handleError(ctx, k, logger, errorExecs, &errorExists, err, idx, contract.ContractAddress) {
-			continue
-		}
+		contractAddress := active[(offset+i)%len(active)]
+		consumed, execErr := executeClockContract(sdkCtx, k, contractAddress, p.ContractGasLimit)
+		gasUsed += consumed
 
-		// Create context with gas limit
-		childCtx := sdkCtx.WithGasMeter(storetypes.NewGasMeter(p.ContractGasLimit))
+		if execErr != nil {
+			failed = append(failed, contractAddress)
+			logger.Error("clock contract execution failed; jailing it", "contract", contractAddress, "error", execErr)
 
-		// Execute contract
-		helpers.ExecuteContract(k.GetContractKeeper(), childCtx, contractAddr, endBlockSudoMessage, &err)
-		if handleError(ctx, k, logger, errorExecs, &errorExists, err, idx, contract.ContractAddress) {
-			continue
+			if jailErr := k.SetJailStatus(ctx, contractAddress, true); jailErr != nil {
+				logger.Error("Failed to jail contract", "contract", contractAddress, "error", jailErr)
+			}
 		}
 	}
 
-	// Log errors if present
-	if errorExists {
-		logger.Error("Failed to execute contracts", "contracts", errorExecs)
+	if len(failed) > 0 {
+		logger.Error("Failed to execute contracts", "contracts", failed)
 	}
 
 	return nil
 }
 
-// Function to handle contract execution errors. Returns true if error is present, false otherwise.
-func handleError(
-	ctx context.Context,
-	k Keeper,
-	logger log.Logger,
-	errorExecs []string,
-	errorExists *bool,
-	err error,
-	idx int,
-	contractAddress string,
-) bool {
-	// Check if error is present
+// executeClockContract runs clock_end_block on a single contract in an
+// isolated cached context and commits its writes and events only on success.
+// wasmd's Sudo writes directly to the context it is given, so without the
+// cache a contract that fails would keep the state it wrote before failing.
+// It returns the gas the contract consumed (at most gasLimit).
+func executeClockContract(ctx sdk.Context, k Keeper, contractAddress string, gasLimit uint64) (uint64, error) {
+	contractAddr, err := sdk.AccAddressFromBech32(contractAddress)
 	if err != nil {
-		// Flag error
-		*errorExists = true
-		errorExecs[idx] = contractAddress
-
-		// Attempt to jail contract, log error if present
-		err := k.SetJailStatus(ctx, contractAddress, true)
-		if err != nil {
-			logger.Error("Failed to jail contract", "contract", contractAddress, "error", err)
-		}
+		return 0, err
 	}
 
-	return err != nil
+	gasMeter := storetypes.NewGasMeter(gasLimit)
+	cacheCtx, writeCache := ctx.CacheContext()
+	cacheCtx = cacheCtx.WithGasMeter(gasMeter)
+
+	var execErr error
+	helpers.ExecuteContract(k.GetContractKeeper(), cacheCtx, contractAddr, endBlockSudoMessage, &execErr)
+	if execErr != nil {
+		return gasMeter.GasConsumedToLimit(), execErr
+	}
+
+	writeCache()
+	return gasMeter.GasConsumedToLimit(), nil
 }

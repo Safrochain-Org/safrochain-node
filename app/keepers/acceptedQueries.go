@@ -11,7 +11,7 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
-	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
+	govv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	tokenfactorytypes "github.com/Safrochain_Org/safrochain/x/tokenfactory/types"
@@ -43,12 +43,12 @@ func AcceptedQueries() map[string]func() proto.Message {
 
 		// bank
 		"/cosmos.bank.v1beta1.Query/Balance":       func() proto.Message { return &banktypes.QueryBalanceResponse{} },
-		"/cosmos.bank.v1beta1.Query/DenomMetadata": func() proto.Message { return &banktypes.QueryDenomsMetadataResponse{} },
+		"/cosmos.bank.v1beta1.Query/DenomMetadata": func() proto.Message { return &banktypes.QueryDenomMetadataResponse{} },
 		"/cosmos.bank.v1beta1.Query/Params":        func() proto.Message { return &banktypes.QueryParamsResponse{} },
 		"/cosmos.bank.v1beta1.Query/SupplyOf":      func() proto.Message { return &banktypes.QuerySupplyOfResponse{} },
 
 		// governance
-		"/cosmos.gov.v1beta1.Query/Vote": func() proto.Message { return &govv1.QueryVoteResponse{} },
+		"/cosmos.gov.v1beta1.Query/Vote": func() proto.Message { return &govv1beta1.QueryVoteResponse{} },
 
 		// distribution
 		"/cosmos.distribution.v1beta1.Query/DelegationRewards": func() proto.Message { return &distrtypes.QueryDelegationRewardsResponse{} },

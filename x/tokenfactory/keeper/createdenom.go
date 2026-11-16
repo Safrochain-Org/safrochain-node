@@ -3,6 +3,8 @@ package keeper
 import (
 	"context"
 
+	errorsmod "cosmossdk.io/errors"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
@@ -28,19 +30,23 @@ func (k Keeper) CreateDenom(ctx context.Context, creatorAddr string, subdenom st
 // Runs CreateDenom logic after the charge and all denom validation has been handled.
 // Made into a second function for genesis initialization.
 func (k Keeper) createDenomAfterValidation(ctx context.Context, creatorAddr string, denom string) (err error) {
-	denomMetaData := banktypes.Metadata{
-		DenomUnits: []*banktypes.DenomUnit{{
-			Denom:    denom,
-			Exponent: 0,
-		}},
-		Base: denom,
-		// The following is necessary for x/bank denom validation
-		Display: denom,
-		Name:    denom,
-		Symbol:  denom,
-	}
+	// Only set default metadata when none exists, so importing genesis does
+	// not clobber metadata already present in the bank module.
+	if !k.bankKeeper.HasDenomMetaData(ctx, denom) {
+		denomMetaData := banktypes.Metadata{
+			DenomUnits: []*banktypes.DenomUnit{{
+				Denom:    denom,
+				Exponent: 0,
+			}},
+			Base: denom,
+			// The following is necessary for x/bank denom validation
+			Display: denom,
+			Name:    denom,
+			Symbol:  denom,
+		}
 
-	k.bankKeeper.SetDenomMetaData(ctx, denomMetaData)
+		k.bankKeeper.SetDenomMetaData(ctx, denomMetaData)
+	}
 
 	authorityMetadata := types.DenomAuthorityMetadata{
 		Admin: creatorAddr,
@@ -55,13 +61,17 @@ func (k Keeper) createDenomAfterValidation(ctx context.Context, creatorAddr stri
 }
 
 func (k Keeper) validateCreateDenom(ctx context.Context, creatorAddr string, subdenom string) (newTokenDenom string, err error) {
+	if subdenom == "" {
+		return "", errorsmod.Wrap(types.ErrInvalidDenom, "subdenom must not be empty")
+	}
+
 	denom, err := types.GetTokenDenom(creatorAddr, subdenom)
 	if err != nil {
 		return "", err
 	}
 
 	_, found := k.bankKeeper.GetDenomMetaData(ctx, denom)
-	if found {
+	if found || k.bankKeeper.HasSupply(ctx, denom) {
 		return "", types.ErrDenomExists
 	}
 
@@ -71,9 +81,9 @@ func (k Keeper) validateCreateDenom(ctx context.Context, creatorAddr string, sub
 func (k Keeper) chargeForCreateDenom(ctx context.Context, creatorAddr string, _ string) (err error) {
 	params := k.GetParams(ctx)
 
-	// if DenomCreationFee is non-zero, transfer the tokens from the creator
-	// account to community pool
-	if params.DenomCreationFee != nil {
+	// if DenomCreationFee is non-empty, transfer the tokens from the creator
+	// account to community pool. An empty fee explicitly means free creation.
+	if len(params.DenomCreationFee) > 0 {
 		accAddr, err := sdk.AccAddressFromBech32(creatorAddr)
 		if err != nil {
 			return err

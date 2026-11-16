@@ -36,7 +36,7 @@ func (AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 				{
 					RpcMethod: "RegisterStaking",
 					Use:       "register-staking [contract_address] [register_address]",
-					Short:     "Register a staking contract for sudo message updates",
+					Short:     "Register a staking contract for sudo message updates (governance authority only: submit via a gov proposal)",
 					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
 						{ProtoField: "contract_address"},
 						{ProtoField: "register_address"},
@@ -45,7 +45,7 @@ func (AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 				{
 					RpcMethod: "RegisterGovernance",
 					Use:       "register-governance [contract_address] [register_address]",
-					Short:     "Register a governance contract for sudo message updates",
+					Short:     "Register a governance contract for sudo message updates (governance authority only: submit via a gov proposal)",
 					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
 						{ProtoField: "contract_address"},
 						{ProtoField: "register_address"},
@@ -54,7 +54,7 @@ func (AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 				{
 					RpcMethod: "UnregisterStaking",
 					Use:       "unregister-staking [contract_address] [register_address]",
-					Short:     "Remove a staking contract from receiving sudo message updates",
+					Short:     "Remove a staking contract from receiving sudo message updates (contract admin, creator if no admin, or governance)",
 					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
 						{ProtoField: "contract_address"},
 						{ProtoField: "register_address"},
@@ -63,7 +63,7 @@ func (AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 				{
 					RpcMethod: "UnregisterGovernance",
 					Use:       "unregister-governance [contract_address] [register_address]",
-					Short:     "Remove a governance contract from receiving sudo message updates",
+					Short:     "Remove a governance contract from receiving sudo message updates (contract admin, creator if no admin, or governance)",
 					PositionalArgs: []*autocliv1.PositionalArgDescriptor{
 						{ProtoField: "contract_address"},
 						{ProtoField: "register_address"},

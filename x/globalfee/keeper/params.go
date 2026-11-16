@@ -8,6 +8,10 @@ import (
 
 // SetParams sets the x/globalfee module parameters.
 func (k Keeper) SetParams(ctx context.Context, p types.Params) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+
 	store := k.storeService.OpenKVStore(ctx)
 	bz := k.cdc.MustMarshal(&p)
 	err := store.Set(types.ParamsKey, bz)

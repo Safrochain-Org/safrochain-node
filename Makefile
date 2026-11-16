@@ -213,6 +213,26 @@ format:
 
 .PHONY: install-format format install-lint lint
 
+govulncheck=golang.org/x/vuln/cmd/govulncheck
+govulncheck_version=v1.1.4
+
+gosec=github.com/securego/gosec/v2/cmd/gosec
+gosec_version=v2.22.4
+
+## Scan dependencies and code for known vulnerabilities
+vulncheck:
+	@echo "🔄 - Running govulncheck..."
+	@go run $(govulncheck)@$(govulncheck_version) ./...
+	@echo "✅ - govulncheck finished!"
+
+## Run the gosec security scanner
+gosec:
+	@echo "🔄 - Running gosec..."
+	@go run $(gosec)@$(gosec_version) -quiet ./...
+	@echo "✅ - gosec finished!"
+
+.PHONY: vulncheck gosec
+
 ###############################################################################
 ###                             e2e interchain test                         ###
 ###############################################################################

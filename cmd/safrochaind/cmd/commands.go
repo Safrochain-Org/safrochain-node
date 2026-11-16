@@ -28,13 +28,12 @@ import (
 	"github.com/Safrochain_Org/safrochain/app"
 )
 
+// tempDir creates a temporary directory. The caller owns it and must remove it.
 var tempDir = func() string {
 	dir, err := os.MkdirTemp("", "safrochain")
 	if err != nil {
 		panic("failed to create temp dir: " + err.Error())
 	}
-	defer os.RemoveAll(dir) //nolint:errcheck
-
 	return dir
 }
 

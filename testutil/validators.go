@@ -32,7 +32,8 @@ func (s *KeeperTestHelper) SetupValidator(bondStatus stakingtypes.BondStatus) sd
 		valAddr.String(),
 		valPub,
 		stakingCoin,
-		stakingtypes.Description{},
+		// SDK v0.50 rejects an empty description in MsgCreateValidator.Validate.
+		stakingtypes.Description{Moniker: "test-validator-" + valAddr.String()[len(valAddr.String())-6:]},
 		zeroCommission,
 		sdkmath.OneInt(),
 	)

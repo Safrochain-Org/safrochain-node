@@ -35,21 +35,21 @@ type DeductFeeDecorator struct {
 	accountKeeper   ante.AccountKeeper
 	bankKeeper      bankkeeper.Keeper
 	feegrantKeeper  ante.FeegrantKeeper
-	bondDenom       string
+	stakingKeeper   feepaytypes.StakingKeeper
 }
 
 // NewDeductFeeDecorator constructs a DeductFeeDecorator. The previous
 // `isFeePayTx *bool` argument was removed in favour of per-transaction
 // state stored on sdk.Context (SAF-08); the FeeRouteDecorator allocates
 // that state and downstream decorators read it via feepayhelpers.
-func NewDeductFeeDecorator(fpk feepaykeeper.Keeper, gfk globalfeekeeper.Keeper, ak ante.AccountKeeper, bk bankkeeper.Keeper, fgk ante.FeegrantKeeper, bondDenom string) DeductFeeDecorator {
+func NewDeductFeeDecorator(fpk feepaykeeper.Keeper, gfk globalfeekeeper.Keeper, ak ante.AccountKeeper, bk bankkeeper.Keeper, fgk ante.FeegrantKeeper, sk feepaytypes.StakingKeeper) DeductFeeDecorator {
 	return DeductFeeDecorator{
 		feepayKeeper:    fpk,
 		globalfeeKeeper: gfk,
 		accountKeeper:   ak,
 		bankKeeper:      bk,
 		feegrantKeeper:  fgk,
-		bondDenom:       bondDenom,
+		stakingKeeper:   sk,
 	}
 }
 
@@ -118,42 +118,23 @@ func (dfd DeductFeeDecorator) checkDeductFee(ctx sdk.Context, sdkTx sdk.Tx, fee 
 		return sdkerrors.ErrUnknownAddress.Wrapf("fee payer address: %s does not exist", deductFeesFrom)
 	}
 
-	// Define errors per route
-	var feePayErr error
-	var sdkErr error
-
 	state := feepaytypes.GetFeePayTxState(ctx)
 
-	// First try to handle FeePay transactions, if error, try the std sdk route.
-	// If not a FeePay transaction, default to the std sdk route.
 	if state.IsFeePayTx() {
-		// If the fee pay route fails, try the std sdk route
-		feePayErr = dfd.handleZeroFees(ctx, deductFeesFromAcc, sdkTx, fee)
-		if feePayErr != nil {
-			// Flag the tx to be processed by GlobalFee for the remaining
-			// decorators in this transaction (SAF-08: scoped to the per-tx
-			// state instance, not a globally shared pointer).
-			state.SetFeePayTx(false)
-
-			// call GlobalFee handler here
-			sdkErr = DeductFees(dfd.bankKeeper, ctx, deductFeesFromAcc, fee)
+		// FeePay transactions are zero-fee by construction. If the sponsorship
+		// cannot be honoured, fail closed: falling back to the standard SDK
+		// deduction would charge a zero fee and let the tx through for free.
+		if err := dfd.handleZeroFees(ctx, sdkTx, fee); err != nil {
+			return errorsmod.Wrap(err, "fee pay sponsorship failed")
 		}
-		// caught in globalfee
 	} else if !fee.IsZero() {
 		// Std sdk route
-		sdkErr = DeductFees(dfd.bankKeeper, ctx, deductFeesFromAcc, fee)
+		if err := DeductFees(dfd.bankKeeper, ctx, deductFeesFromAcc, fee); err != nil {
+			return err
+		}
 	}
 
 	addrStr := sdk.AccAddress(deductFeesFrom).String()
-
-	// If no fee pay error exists, the tx processed successfully. If
-	// a sdk error is present, return all errors.
-	if sdkErr != nil {
-		if feePayErr != nil {
-			return errorsmod.Wrapf(feepaytypes.ErrDeductFees, "error deducting fees; fee pay error: %s, sdk error: %s", feePayErr, sdkErr)
-		}
-		return sdkErr
-	}
 
 	events := sdk.Events{
 		sdk.NewEvent(
@@ -168,9 +149,15 @@ func (dfd DeductFeeDecorator) checkDeductFee(ctx sdk.Context, sdkTx sdk.Tx, fee 
 }
 
 // Handle zero fee transactions for fee prepay module
-func (dfd DeductFeeDecorator) handleZeroFees(ctx sdk.Context, deductFeesFromAcc sdk.AccountI, tx sdk.Tx, _ sdk.Coins) error {
-	msg := tx.GetMsgs()[0]
-	cw := msg.(*wasmtypes.MsgExecuteContract)
+func (dfd DeductFeeDecorator) handleZeroFees(ctx sdk.Context, tx sdk.Tx, _ sdk.Coins) error {
+	msgs := tx.GetMsgs()
+	if len(msgs) != 1 {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "fee pay transactions must contain exactly 1 message, got %d", len(msgs))
+	}
+	cw, ok := msgs[0].(*wasmtypes.MsgExecuteContract)
+	if !ok {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "fee pay transactions must execute a contract, got %T", msgs[0])
+	}
 
 	// Get the fee pay contract
 	feepayContract, err := dfd.feepayKeeper.GetContract(ctx, cw.GetContract())
@@ -178,33 +165,57 @@ func (dfd DeductFeeDecorator) handleZeroFees(ctx sdk.Context, deductFeesFromAcc 
 		return errorsmod.Wrapf(err, "error getting contract %s", cw.GetContract())
 	}
 
-	// Get the fee price in the chain denom
+	// Get the fee price in the chain denom (resolved at runtime from x/staking)
+	bondDenom, err := dfd.stakingKeeper.BondDenom(ctx)
+	if err != nil {
+		return errorsmod.Wrap(err, "error getting bond denom")
+	}
 	feePrice := sdk.DecCoin{}
 	for _, c := range dfd.globalfeeKeeper.GetParams(ctx).MinimumGasPrices {
-		if c.Denom == dfd.bondDenom {
+		if c.Denom == bondDenom {
 			feePrice = c
 		}
 	}
 
 	if feePrice == (sdk.DecCoin{}) {
-		return errorsmod.Wrapf(sdkerrors.ErrInvalidCoins, "fee price not found for denom %s in globalfee keeper", dfd.bondDenom)
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidCoins, "fee price not found for denom %s in globalfee keeper", bondDenom)
 	}
 
-	// Get the tx gas
-	feeTx := tx.(sdk.FeeTx)
-	gas := sdkmath.LegacyNewDec(int64(feeTx.GetGas()))
+	// Get the tx gas. The sponsor is charged for the DECLARED gas limit, so
+	// bound it before doing any arithmetic with it.
+	feeTx, ok := tx.(sdk.FeeTx)
+	if !ok {
+		return errorsmod.Wrap(sdkerrors.ErrTxDecode, "Tx must be a FeeTx")
+	}
+	gasLimit := feeTx.GetGas()
+	if gasLimit > feepaytypes.MaxSponsoredGas {
+		return errorsmod.Wrapf(feepaytypes.ErrSponsoredGasExceeded, "gas limit %d exceeds the maximum sponsored gas %d", gasLimit, feepaytypes.MaxSponsoredGas)
+	}
+	gas := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(gasLimit))
 
 	requiredFee := feePrice.Amount.Mul(gas).Ceil().RoundInt()
+	if !requiredFee.IsUint64() {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "required fee %s overflows uint64", requiredFee)
+	}
+	requiredFeeAmt := requiredFee.Uint64()
+
+	// Usage is tracked per contract caller (the MsgExecuteContract sender), not
+	// per fee payer / fee granter, so the limit applies to the actual user of
+	// the contract.
+	senderAddr, err := sdk.AccAddressFromBech32(cw.Sender)
+	if err != nil {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidAddress, "invalid contract sender %s: %s", cw.Sender, err)
+	}
+	accBech32 := senderAddr.String()
 
 	// Check if wallet exceeded usage limit on contract
-	accBech32 := deductFeesFromAcc.GetAddress().String()
 	if dfd.feepayKeeper.HasWalletExceededUsageLimit(ctx, feepayContract, accBech32) {
 		return errorsmod.Wrapf(feepaytypes.ErrWalletExceededUsageLimit, "wallet has exceeded usage limit (%d)", feepayContract.WalletLimit)
 	}
 
 	// Check if the contract has enough funds to cover the fee
-	if !dfd.feepayKeeper.CanContractCoverFee(feepayContract, requiredFee.Uint64()) {
-		return errorsmod.Wrapf(feepaytypes.ErrContractNotEnoughFunds, "contract has insufficient funds; expected: %d, got: %d", requiredFee.Uint64(), feepayContract.Balance)
+	if !dfd.feepayKeeper.CanContractCoverFee(feepayContract, requiredFeeAmt) {
+		return errorsmod.Wrapf(feepaytypes.ErrContractNotEnoughFunds, "contract has insufficient funds; expected: %d, got: %d", requiredFeeAmt, feepayContract.Balance)
 	}
 
 	// Create an array of coins, storing the required fee
@@ -216,7 +227,7 @@ func (dfd DeductFeeDecorator) handleZeroFees(ctx sdk.Context, deductFeesFromAcc 
 	}
 
 	// Deduct the fee from the contract balance
-	dfd.feepayKeeper.SetContractBalance(ctx, feepayContract, feepayContract.Balance-requiredFee.Uint64())
+	dfd.feepayKeeper.SetContractBalance(ctx, feepayContract, feepayContract.Balance-requiredFeeAmt)
 
 	// Increment wallet usage
 	if err := dfd.feepayKeeper.IncrementContractUses(ctx, feepayContract, accBech32, 1); err != nil {
@@ -260,7 +271,7 @@ func (DeductFeeDecorator) checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, t
 
 			// Determine the required fees by multiplying each required minimum gas
 			// price by the gas limit, where fee = ceil(minGasPrice * gasLimit).
-			glDec := sdkmath.LegacyNewDec(int64(gas))
+			glDec := sdkmath.LegacyNewDecFromInt(sdkmath.NewIntFromUint64(gas))
 			for i, gp := range minGasPrices {
 				fee := gp.Amount.Mul(glDec)
 				requiredFees[i] = sdk.NewCoin(gp.Denom, fee.Ceil().RoundInt())
@@ -272,7 +283,7 @@ func (DeductFeeDecorator) checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, t
 		}
 	}
 
-	priority := getTxPriority(feeCoins, int64(gas))
+	priority := getTxPriority(feeCoins, gas)
 	return feeCoins, priority, nil
 }
 
@@ -280,11 +291,16 @@ func (DeductFeeDecorator) checkTxFeeWithValidatorMinGasPrices(ctx sdk.Context, t
 // provided in a transaction.
 // NOTE: This implementation should be used with a great consideration as it opens potential attack vectors
 // where txs with multiple coins could not be prioritize as expected.
-func getTxPriority(fee sdk.Coins, gas int64) int64 {
+func getTxPriority(fee sdk.Coins, gas uint64) int64 {
+	if gas == 0 {
+		return 0
+	}
+
 	var priority int64
+	gasInt := sdkmath.NewIntFromUint64(gas)
 	for _, c := range fee {
 		p := int64(math.MaxInt64)
-		gasPrice := c.Amount.QuoRaw(gas)
+		gasPrice := c.Amount.Quo(gasInt)
 		if gasPrice.IsInt64() {
 			p = gasPrice.Int64()
 		}

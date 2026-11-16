@@ -1,6 +1,6 @@
 # docker build . -t Safrochain_Org/safrochain:latest
 # docker run --rm -it Safrochain_Org/safrochain:latest /bin/sh
-FROM golang:1.25.8-alpine AS go-builder
+FROM golang:1.26.11-alpine AS go-builder
 
 # this comes from standard alpine nightly file
 #  https://github.com/rust-lang/docker-rust-nightly/blob/master/alpine3.12/Dockerfile
@@ -42,12 +42,21 @@ RUN LEDGER_ENABLED=false BUILD_TAGS=muslc LINK_STATICALLY=true make build \
 
 FROM alpine:3.21
 
+# Run as a dedicated unprivileged user; the node home (~/.safrochain) lives in its home dir.
+RUN addgroup -g 1000 -S safrochain \
+  && adduser -u 1000 -S -G safrochain -h /home/safrochain -s /bin/sh safrochain \
+  && mkdir -p /home/safrochain/.safrochain \
+  && chown -R safrochain:safrochain /home/safrochain
+
 COPY --from=go-builder /code/bin/safrochaind /usr/bin/safrochaind
 
 COPY docker/* /opt/
 RUN chmod +x /opt/*.sh
 
 WORKDIR /opt
+
+USER safrochain:safrochain
+ENV HOME=/home/safrochain
 
 # rest server, comet p2p, comet rpc
 EXPOSE 1317 26656 26657

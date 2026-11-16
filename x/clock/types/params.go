@@ -26,6 +26,13 @@ const (
 	// DefaultContractGasLimit is the gas budget assigned at genesis and
 	// used when params are reset to their defaults.
 	DefaultContractGasLimit uint64 = MinContractGasLimit
+
+	// MaxBlockGas bounds the total gas all clock contracts may consume in a
+	// single EndBlocker. EndBlock gas is not metered by the block gas limit,
+	// so without this bound the per-block work grows with the number of
+	// registered contracts. When more contracts are registered than fit in
+	// the budget they are served round-robin across blocks.
+	MaxBlockGas uint64 = 20_000_000
 )
 
 // DefaultParams returns default parameters

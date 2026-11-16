@@ -21,6 +21,29 @@ type TokenFactoryMsg struct {
 	ForceTransfer *ForceTransfer `json:"force_transfer,omitempty"`
 }
 
+// VariantCount returns how many variants of the message are set. A valid
+// message has exactly one.
+func (m TokenFactoryMsg) VariantCount() int {
+	return countSet(
+		m.CreateDenom != nil,
+		m.ChangeAdmin != nil,
+		m.MintTokens != nil,
+		m.BurnTokens != nil,
+		m.SetMetadata != nil,
+		m.ForceTransfer != nil,
+	)
+}
+
+func countSet(set ...bool) int {
+	n := 0
+	for _, b := range set {
+		if b {
+			n++
+		}
+	}
+	return n
+}
+
 // CreateDenom creates a new factory denom, of denomination:
 // factory/{creating contract address}/{Subdenom}
 // Subdenom can be of length at most 44 characters, in [0-9a-zA-Z./]

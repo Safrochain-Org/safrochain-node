@@ -11,4 +11,5 @@ var (
 	ErrInvalidSafrochainFundAmount = errorsmod.Register(ModuleName, 4, "fee pay contracts only accept safrochain funds")
 	ErrFeePayDisabled              = errorsmod.Register(ModuleName, 5, "the FeePay module is disabled")
 	ErrDeductFees                  = errorsmod.Register(ModuleName, 6, "error deducting fees")
+	ErrSponsoredGasExceeded        = errorsmod.Register(ModuleName, 7, "gas limit exceeds the maximum sponsored gas")
 )

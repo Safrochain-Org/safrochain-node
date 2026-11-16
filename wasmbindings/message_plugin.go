@@ -3,6 +3,7 @@ package bindings
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmvmtypes "github.com/CosmWasm/wasmvm/v2/types"
@@ -11,6 +12,7 @@ import (
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
@@ -51,6 +53,10 @@ func (m *CustomMessenger) DispatchMsg(
 		var contractMsg types.TokenFactoryMsg
 		if err := json.Unmarshal(msg.Custom, &contractMsg); err != nil {
 			return nil, nil, nil, errorsmod.Wrap(err, "tokenfactory msg")
+		}
+
+		if n := contractMsg.VariantCount(); n > 1 {
+			return nil, nil, nil, wasmvmtypes.InvalidRequest{Err: fmt.Sprintf("tokenfactory msg must set exactly one variant, got %d", n)}
 		}
 
 		if contractMsg.CreateDenom != nil {
@@ -141,6 +147,12 @@ func PerformMint(ctx context.Context, f *tokenfactorykeeper.Keeper, b bankkeeper
 		return err
 	}
 
+	// Reject blocked recipients before minting anything, so a failed mint
+	// leaves no coins behind on the contract.
+	if b.BlockedAddr(rcpt) {
+		return errorsmod.Wrapf(sdkerrors.ErrUnauthorized, "minting coins to blocked address %s", rcpt.String())
+	}
+
 	coin := sdk.Coin{Denom: mint.Denom, Amount: mint.Amount}
 
 	sdkMsg := &tokenfactorytypes.MsgMint{
@@ -158,10 +170,6 @@ func PerformMint(ctx context.Context, f *tokenfactorykeeper.Keeper, b bankkeeper
 	_, err = msgServer.Mint(ctx, sdkMsg)
 	if err != nil {
 		return errorsmod.Wrap(err, "minting coins from message")
-	}
-
-	if b.BlockedAddr(rcpt) {
-		return errorsmod.Wrapf(err, "minting coins to blocked address %s", rcpt.String())
 	}
 
 	err = b.SendCoins(ctx, contractAddr, rcpt, sdk.NewCoins(coin))
@@ -307,16 +315,7 @@ func (m *CustomMessenger) setMetadata(ctx context.Context, contractAddr sdk.AccA
 
 // PerformSetMetadata is used with setMetadata to add new metadata
 // It also is called inside CreateDenom if optional metadata field is set
-func PerformSetMetadata(ctx context.Context, f *tokenfactorykeeper.Keeper, b bankkeeper.Keeper, contractAddr sdk.AccAddress, denom string, metadata types.Metadata) error {
-	// ensure contract address is admin of denom
-	auth, err := f.GetAuthorityMetadata(ctx, denom)
-	if err != nil {
-		return err
-	}
-	if auth.Admin != contractAddr.String() {
-		return wasmvmtypes.InvalidRequest{Err: "only admin can set metadata"}
-	}
-
+func PerformSetMetadata(ctx context.Context, f *tokenfactorykeeper.Keeper, _ bankkeeper.Keeper, contractAddr sdk.AccAddress, denom string, metadata types.Metadata) error {
 	// ensure we are setting proper denom metadata (bank uses Base field, fill it if missing)
 	if metadata.Base == "" {
 		metadata.Base = denom
@@ -325,13 +324,20 @@ func PerformSetMetadata(ctx context.Context, f *tokenfactorykeeper.Keeper, b ban
 		return wasmvmtypes.InvalidRequest{Err: "Base must be the same as denom"}
 	}
 
-	// Create and validate the metadata
-	bankMetadata := WasmMetadataToSdk(metadata)
-	if err := bankMetadata.Validate(); err != nil {
+	sdkMsg := &tokenfactorytypes.MsgSetDenomMetadata{
+		Sender:   contractAddr.String(),
+		Metadata: WasmMetadataToSdk(metadata),
+	}
+	if err := sdkMsg.ValidateBasic(); err != nil {
 		return err
 	}
 
-	b.SetDenomMetaData(ctx, bankMetadata)
+	// Go through the tokenfactory message server so that the EnableSetMetadata
+	// capability, admin check and anti-spoofing guard all apply.
+	msgServer := tokenfactorykeeper.NewMsgServerImpl(*f)
+	if _, err := msgServer.SetDenomMetadata(ctx, sdkMsg); err != nil {
+		return errorsmod.Wrap(err, "setting denom metadata from message")
+	}
 	return nil
 }
 

@@ -1,6 +1,7 @@
 package ante
 
 import (
+	"bytes"
 	"encoding/json"
 
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
@@ -39,6 +40,14 @@ func (fsd FeeSharePayoutDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 		return ctx, errorsmod.Wrap(sdkerrors.ErrTxDecode, "Tx must be a FeeTx")
 	}
 
+	// When the fee is paid out of a fee granter's allowance (granter != payer),
+	// skip the payout: otherwise a grantee could register their own contract,
+	// set an arbitrarily high fee and convert the granter's allowance into
+	// spendable funds for their withdraw address.
+	if granter := feeTx.FeeGranter(); len(granter) > 0 && !bytes.Equal(granter, feeTx.FeePayer()) {
+		return next(ctx, tx, simulate)
+	}
+
 	err = fsd.FeeSharePayout(ctx, fsd.bankKeeper, feeTx.GetFee(), fsd.feesharekeeper, tx.GetMsgs())
 	if err != nil {
 		return ctx, errorsmod.Wrapf(sdkerrors.ErrInsufficientFunds, "%s", err.Error())
@@ -54,7 +63,7 @@ func (fsd FeeSharePayoutDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 func FeePayLogic(fees sdk.Coins, govPercent sdkmath.LegacyDec, numPairs int) sdk.Coins {
 	var splitFees sdk.Coins
 	for _, c := range fees.Sort() {
-		rewardAmount := govPercent.MulInt(c.Amount).QuoInt64(int64(numPairs)).RoundInt()
+		rewardAmount := govPercent.MulInt(c.Amount).QuoInt64(int64(numPairs)).TruncateInt()
 		if !rewardAmount.IsZero() {
 			splitFees = splitFees.Add(sdk.NewCoin(c.Denom, rewardAmount))
 		}

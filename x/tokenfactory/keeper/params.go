@@ -8,6 +8,10 @@ import (
 
 // SetParams sets the x/tokenfactory module parameters.
 func (k Keeper) SetParams(ctx context.Context, p types.Params) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+
 	store := k.storeService.OpenKVStore(ctx)
 	bz := k.cdc.MustMarshal(&p)
 	err := store.Set(types.ParamsKey, bz)
@@ -18,15 +22,13 @@ func (k Keeper) SetParams(ctx context.Context, p types.Params) error {
 	return nil
 }
 
-// GetParams returns the current x/tokenfactory module parameters.
+// GetParams returns the current x/tokenfactory module parameters. If the
+// params are absent from the store, DefaultParams is returned (fail-safe).
 func (k Keeper) GetParams(ctx context.Context) (p types.Params) {
 	store := k.storeService.OpenKVStore(ctx)
 	bz, err := store.Get(types.ParamsKey)
-	if bz == nil {
-		return p
-	}
-	if err != nil {
-		return p
+	if err != nil || bz == nil {
+		return types.DefaultParams()
 	}
 
 	k.cdc.MustUnmarshal(bz, &p)

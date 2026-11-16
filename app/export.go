@@ -3,7 +3,6 @@ package app
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 
@@ -60,7 +59,7 @@ func (app *App) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAddrs []str
 	for _, addr := range jailAllowedAddrs {
 		_, err := sdk.ValAddressFromBech32(addr)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		allowedAddrsMap[addr] = true
 	}
@@ -76,6 +75,8 @@ func (app *App) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAddrs []str
 		if err != nil {
 			panic(err)
 		}
+		// An error here only means the validator has no commission to withdraw
+		// (ErrNoValidatorCommission), so it is intentionally ignored.
 		_, _ = app.AppKeepers.DistrKeeper.WithdrawValidatorCommission(ctx, valBz)
 		return false
 	})
@@ -219,13 +220,12 @@ func (app *App) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAddrs []str
 	}
 
 	if err := iter.Close(); err != nil {
-		app.Logger().Error("error while closing the key-value store reverse prefix iterator: ", err)
-		return
+		panic(fmt.Errorf("error while closing the key-value store reverse prefix iterator: %w", err))
 	}
 
 	_, err = app.AppKeepers.StakingKeeper.ApplyAndReturnValidatorSetUpdates(ctx)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	/* Handle slashing state. */

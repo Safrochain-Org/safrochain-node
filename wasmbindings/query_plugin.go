@@ -21,6 +21,10 @@ func CustomQuerier(qp *QueryPlugin) func(ctx sdk.Context, request json.RawMessag
 			return nil, errorsmod.Wrap(err, "osmosis query")
 		}
 
+		if n := contractQuery.VariantCount(); n > 1 {
+			return nil, wasmvmtypes.InvalidRequest{Err: fmt.Sprintf("tokenfactory query must set exactly one variant, got %d", n)}
+		}
+
 		switch {
 		case contractQuery.FullDenom != nil:
 			creator := contractQuery.FullDenom.CreatorAddr
